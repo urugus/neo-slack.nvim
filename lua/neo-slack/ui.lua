@@ -12,6 +12,15 @@ local M = {}
 -- バッファ名の接頭辞
 M.buffer_prefix = 'neo-slack://'
 
+-- レイアウト設定
+M.layout = {
+  initialized = false,
+  channels_win = nil,
+  messages_win = nil,
+  channels_buf = nil,
+  messages_buf = nil,
+}
+
 -- 現在のバッファ情報
 M.buffers = {
   channels = nil,
@@ -35,11 +44,60 @@ local function setup_buffer_options(bufnr, filetype)
   vim.api.nvim_buf_set_option(bufnr, 'filetype', filetype)
 end
 
+-- 分割レイアウトを設定
+function M.setup_split_layout()
+  -- すでに初期化されている場合は何もしない
+  if M.layout.initialized then
+    return
+  end
+  
+  -- 現在のウィンドウを保存
+  local current_win = vim.api.nvim_get_current_win()
+  
+  -- 現在のバッファを保存
+  local current_buf = vim.api.nvim_get_current_buf()
+  
+  -- 新しいバッファを作成（一時的なもの）
+  local temp_buf = vim.api.nvim_create_buf(false, true)
+  
+  -- 垂直分割で新しいウィンドウを作成（右側70%）
+  vim.cmd('vsplit')
+  vim.cmd('wincmd l')
+  
+  -- 右側のウィンドウ（メッセージ一覧）を保存
+  M.layout.messages_win = vim.api.nvim_get_current_win()
+  
+  -- 一時バッファを右側のウィンドウに設定
+  vim.api.nvim_win_set_buf(M.layout.messages_win, temp_buf)
+  
+  -- 左側のウィンドウ（チャンネル一覧）に移動
+  vim.cmd('wincmd h')
+  
+  -- 左側のウィンドウを保存
+  M.layout.channels_win = vim.api.nvim_get_current_win()
+  
+  -- 左側のウィンドウのサイズを調整（30%）
+  vim.cmd('vertical resize 30')
+  
+  -- レイアウトが初期化されたことを記録
+  M.layout.initialized = true
+  
+  -- 元のウィンドウに戻る
+  vim.api.nvim_set_current_win(current_win)
+  
+  -- 通知
+  notify('Slackレイアウトを初期化しました', vim.log.levels.INFO)
+end
+
 -- チャンネル一覧を表示
 ---@param channels table[] チャンネルオブジェクトの配列
 function M.show_channels(channels)
+  -- 分割レイアウトを設定
+  M.setup_split_layout()
+  
   -- バッファを作成または取得
   local bufnr = M.get_or_create_buffer('channels')
+  M.layout.channels_buf = bufnr
   
   -- バッファを設定
   setup_buffer_options(bufnr, 'neo-slack-channels')
@@ -75,8 +133,11 @@ function M.show_channels(channels)
   -- キーマッピングを設定
   M.setup_channels_keymaps(bufnr)
   
-  -- バッファを表示
-  vim.cmd('buffer ' .. bufnr)
+  -- 左側のウィンドウにバッファを表示
+  vim.api.nvim_win_set_buf(M.layout.channels_win, bufnr)
+  
+  -- チャンネル一覧のウィンドウにフォーカス
+  vim.api.nvim_set_current_win(M.layout.channels_win)
 end
 
 -- チャンネル名を取得
@@ -93,6 +154,9 @@ end
 ---@param channel string チャンネル名またはID
 ---@param messages table[] メッセージオブジェクトの配列
 function M.show_messages(channel, messages)
+  -- 分割レイアウトを設定
+  M.setup_split_layout()
+  
   -- チャンネル名を取得
   local channel_name = channel
   if channel:match('^[A-Z0-9]+$') then
@@ -101,6 +165,7 @@ function M.show_messages(channel, messages)
   
   -- バッファを作成または取得
   local bufnr = M.get_or_create_buffer('messages_' .. channel)
+  M.layout.messages_buf = bufnr
   
   -- 現在のチャンネルIDをグローバル変数に保存
   vim.g.neo_slack_current_channel_id = channel
@@ -179,9 +244,11 @@ function M.show_messages(channel, messages)
   
   -- キーマッピングを設定
   M.setup_messages_keymaps(bufnr)
+  -- 右側のウィンドウにバッファを表示
+  vim.api.nvim_win_set_buf(M.layout.messages_win, bufnr)
   
-  -- バッファを表示
-  vim.cmd('buffer ' .. bufnr)
+  -- メッセージ一覧のウィンドウにフォーカス
+  vim.api.nvim_set_current_win(M.layout.messages_win)
   
   -- 非同期でユーザー名を取得して表示を更新
   for user_id, line_indices in pairs(user_message_lines) do
@@ -331,8 +398,11 @@ function M.select_channel()
     
     notify(channel_name .. ' を選択しました', vim.log.levels.INFO)
     
-    -- チャンネルのメッセージを表示
+    -- チャンネルのメッセージを表示（右側のウィンドウに）
     require('neo-slack').list_messages(channel_id)
+    
+    -- メッセージ一覧のウィンドウにフォーカス
+    vim.api.nvim_set_current_win(M.layout.messages_win)
   else
     -- 従来の方法でチャンネル名を抽出
     local channel_name = line:match('[✓%s][#🔒]%s+([%w-_]+)')
@@ -344,6 +414,9 @@ function M.select_channel()
     
     -- チャンネルのメッセージを表示
     require('neo-slack').list_messages(channel_name)
+    
+    -- メッセージ一覧のウィンドウにフォーカス
+    vim.api.nvim_set_current_win(M.layout.messages_win)
   end
 end
 
