@@ -80,6 +80,36 @@ Neo-Slackは初回起動時に自動的にSlack APIトークンの入力を求�
 
 トークンはNeovimの設定ファイルに直接記載する必要はありません。これにより、公開リポジトリに誤ってトークンを含めてしまうリスクを軽減できます。
 
+### トークンの種類
+
+Slack APIでは、2種類のトークンが使用できます:
+
+1. **ボットトークン** (xoxb-で始まる)
+   - ボットとして動作します
+   - メッセージはボットの名前で送信されます
+   - 特定のスコープ（権限）に制限されます
+
+2. **ユーザートークン** (xoxp-で始まる)
+   - ユーザーとして動作します
+   - メッセージはユーザー自身の名前で送信されます
+   - より広範なスコープ（権限）にアクセスできます
+
+**自分自身として送信したい場合は、ユーザートークン（xoxp-）を使用してください。**
+
+ユーザートークンの取得方法:
+1. https://api.slack.com/apps にアクセス
+2. アプリを選択または新規作成
+3. 左メニューから「OAuth & Permissions」を選択
+4. 「User Token Scopes」に必要な権限を追加:
+   - channels:read, groups:read, im:read, mpim:read (チャンネル一覧の取得)
+   - channels:history, groups:history, im:history, mpim:history (メッセージの取得)
+   - chat:write (メッセージの送信)
+   - reactions:write (リアクションの追加)
+   - files:write (ファイルのアップロード)
+5. 「Install to Workspace」でアプリをインストール
+6. 「User OAuth Token」をコピー（xoxp-で始まるトークン）
+7. `:SlackResetToken`コマンドでトークンを設定
+
 ### Vimスクリプトの場合
 
 ```vim

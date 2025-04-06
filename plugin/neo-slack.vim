@@ -17,6 +17,7 @@ command! -nargs=+ SlackReact lua require('neo-slack').add_reaction(<f-args>)
 command! -nargs=+ SlackUpload lua require('neo-slack').upload_file(<f-args>)
 command! -nargs=0 SlackDeleteToken lua require('neo-slack').delete_token()
 command! -nargs=? SlackSetToken lua require('neo-slack').prompt_for_token()
+command! -nargs=0 SlackResetToken lua require('neo-slack').reset_token()
 
 " デフォルト設定
 let g:neo_slack_token = get(g:, 'neo_slack_token', '')

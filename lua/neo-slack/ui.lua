@@ -1,8 +1,12 @@
--- neo-slack UI モジュール
--- ユーザーインターフェースを処理します
+---@brief [[
+--- neo-slack UI モジュール
+--- ユーザーインターフェースを処理します
+---@brief ]]
 
 local api = require('neo-slack.api')
+local utils = require('neo-slack.utils')
 
+---@class NeoSlackUI
 local M = {}
 
 -- バッファ名の接頭辞
@@ -14,16 +18,31 @@ M.buffers = {
   messages = {},
 }
 
+-- 通知ヘルパー関数
+---@param message string 通知メッセージ
+---@param level number 通知レベル
+local function notify(message, level)
+  utils.notify(message, level)
+end
+
+-- バッファオプションを設定
+---@param bufnr number バッファ番号
+---@param filetype string ファイルタイプ
+local function setup_buffer_options(bufnr, filetype)
+  vim.api.nvim_buf_set_option(bufnr, 'modifiable', true)
+  vim.api.nvim_buf_set_option(bufnr, 'buftype', 'nofile')
+  vim.api.nvim_buf_set_option(bufnr, 'swapfile', false)
+  vim.api.nvim_buf_set_option(bufnr, 'filetype', filetype)
+end
+
 -- チャンネル一覧を表示
+---@param channels table[] チャンネルオブジェクトの配列
 function M.show_channels(channels)
   -- バッファを作成または取得
   local bufnr = M.get_or_create_buffer('channels')
   
   -- バッファを設定
-  vim.api.nvim_buf_set_option(bufnr, 'modifiable', true)
-  vim.api.nvim_buf_set_option(bufnr, 'buftype', 'nofile')
-  vim.api.nvim_buf_set_option(bufnr, 'swapfile', false)
-  vim.api.nvim_buf_set_option(bufnr, 'filetype', 'neo-slack-channels')
+  setup_buffer_options(bufnr, 'neo-slack-channels')
   
   -- チャンネル一覧を整形
   local lines = {
@@ -40,7 +59,7 @@ function M.show_channels(channels)
   for _, channel in ipairs(channels) do
     local prefix = channel.is_private and '🔒' or '#'
     local member_status = channel.is_member and '✓' or ' '
-    local unread = channel.unread_count and channel.unread_count > 0 
+    local unread = channel.unread_count and channel.unread_count > 0
       and string.format(' (%d)', channel.unread_count) or ''
     
     table.insert(lines, string.format('%s %s %s%s', member_status, prefix, channel.name, unread))
@@ -60,13 +79,24 @@ function M.show_channels(channels)
   vim.cmd('buffer ' .. bufnr)
 end
 
+-- チャンネル名を取得
+---@param channel_id string チャンネルID
+---@return string チャンネル名
+local function get_channel_name(channel_id)
+  -- IDからチャンネル名を取得する処理
+  -- 実際の実装では、APIからチャンネル名を取得する必要があります
+  -- 現在は簡略化のためにIDをそのまま返す
+  return channel_id
+end
+
 -- メッセージ一覧を表示
+---@param channel string チャンネル名またはID
+---@param messages table[] メッセージオブジェクトの配列
 function M.show_messages(channel, messages)
   -- チャンネル名を取得
   local channel_name = channel
   if channel:match('^[A-Z0-9]+$') then
-    -- IDからチャンネル名を取得する処理（簡略化）
-    -- 実際の実装では、APIからチャンネル名を取得する必要があります
+    channel_name = get_channel_name(channel)
   end
   
   -- バッファを作成または取得
@@ -76,10 +106,7 @@ function M.show_messages(channel, messages)
   vim.g.neo_slack_current_channel_id = channel
   
   -- バッファを設定
-  vim.api.nvim_buf_set_option(bufnr, 'modifiable', true)
-  vim.api.nvim_buf_set_option(bufnr, 'buftype', 'nofile')
-  vim.api.nvim_buf_set_option(bufnr, 'swapfile', false)
-  vim.api.nvim_buf_set_option(bufnr, 'filetype', 'neo-slack-messages')
+  setup_buffer_options(bufnr, 'neo-slack-messages')
   
   -- メッセージ一覧を整形
   local lines = {
@@ -99,13 +126,13 @@ function M.show_messages(channel, messages)
     -- 実際の実装では、APIからユーザー名を取得する必要があります
     
     -- 日時をフォーマット
-    local timestamp = os.date('%Y-%m-%d %H:%M', math.floor(tonumber(message.ts)))
+    local timestamp = utils.format_timestamp(message.ts)
     
     -- メッセージヘッダー
     table.insert(lines, string.format('### %s (%s)', username, timestamp))
     
     -- メッセージ本文（複数行に対応）
-    local text_lines = M.format_message_text(message.text)
+    local text_lines = utils.split_lines(message.text)
     for _, line in ipairs(text_lines) do
       table.insert(lines, line)
     end
@@ -144,27 +171,9 @@ function M.show_messages(channel, messages)
   vim.cmd('buffer ' .. bufnr)
 end
 
--- メッセージテキストをフォーマット
-function M.format_message_text(text)
-  if not text then
-    return {'(内容なし)'}
-  end
-  
-  -- 改行で分割
-  local lines = {}
-  for line in text:gmatch('[^\r\n]+') do
-    table.insert(lines, line)
-  end
-  
-  -- 空の場合
-  if #lines == 0 then
-    return {'(内容なし)'}
-  end
-  
-  return lines
-end
-
 -- バッファを取得または作成
+---@param name string バッファ名
+---@return number バッファ番号
 function M.get_or_create_buffer(name)
   local full_name = M.buffer_prefix .. name
   
@@ -191,41 +200,72 @@ function M.get_or_create_buffer(name)
   return bufnr
 end
 
+-- キーマッピングを設定
+---@param bufnr number バッファ番号
+---@param mode string モード ('n', 'i', 'v', etc.)
+---@param key string キー
+---@param cmd string コマンド
+---@param opts table|nil オプション
+local function set_keymap(bufnr, mode, key, cmd, opts)
+  opts = opts or { noremap = true, silent = true }
+  vim.api.nvim_buf_set_keymap(bufnr, mode, key, cmd, opts)
+end
+
 -- チャンネル一覧のキーマッピングを設定
+---@param bufnr number バッファ番号
 function M.setup_channels_keymaps(bufnr)
-  local opts = { noremap = true, silent = true, buffer = bufnr }
+  local opts = { noremap = true, silent = true }
   
   -- Enter: チャンネルを選択
-  vim.api.nvim_buf_set_keymap(bufnr, 'n', '<CR>', [[<cmd>lua require('neo-slack.ui').select_channel()<CR>]], opts)
+  set_keymap(bufnr, 'n', '<CR>', [[<cmd>lua require('neo-slack.ui').select_channel()<CR>]], opts)
   
   -- r: チャンネル一覧を更新
-  vim.api.nvim_buf_set_keymap(bufnr, 'n', 'r', [[<cmd>lua require('neo-slack').list_channels()<CR>]], opts)
+  set_keymap(bufnr, 'n', 'r', [[<cmd>lua require('neo-slack').list_channels()<CR>]], opts)
   
   -- q: バッファを閉じる
-  vim.api.nvim_buf_set_keymap(bufnr, 'n', 'q', [[<cmd>bdelete<CR>]], opts)
+  set_keymap(bufnr, 'n', 'q', [[<cmd>bdelete<CR>]], opts)
 end
 
 -- メッセージ一覧のキーマッピングを設定
+---@param bufnr number バッファ番号
 function M.setup_messages_keymaps(bufnr)
-  local opts = { noremap = true, silent = true, buffer = bufnr }
+  local opts = { noremap = true, silent = true }
   
   -- r: 返信モード
-  vim.api.nvim_buf_set_keymap(bufnr, 'n', 'r', [[<cmd>lua require('neo-slack.ui').reply_to_message()<CR>]], opts)
+  set_keymap(bufnr, 'n', 'r', [[<cmd>lua require('neo-slack.ui').reply_to_message()<CR>]], opts)
   
   -- e: リアクション追加
-  vim.api.nvim_buf_set_keymap(bufnr, 'n', 'e', [[<cmd>lua require('neo-slack.ui').add_reaction_to_message()<CR>]], opts)
+  set_keymap(bufnr, 'n', 'e', [[<cmd>lua require('neo-slack.ui').add_reaction_to_message()<CR>]], opts)
   
   -- u: ファイルアップロード
-  vim.api.nvim_buf_set_keymap(bufnr, 'n', 'u', [[<cmd>lua require('neo-slack.ui').upload_file_to_channel()<CR>]], opts)
+  set_keymap(bufnr, 'n', 'u', [[<cmd>lua require('neo-slack.ui').upload_file_to_channel()<CR>]], opts)
   
   -- R: メッセージ一覧を更新
-  vim.api.nvim_buf_set_keymap(bufnr, 'n', 'R', [[<cmd>lua require('neo-slack.ui').refresh_messages()<CR>]], opts)
+  set_keymap(bufnr, 'n', 'R', [[<cmd>lua require('neo-slack.ui').refresh_messages()<CR>]], opts)
   
   -- q: バッファを閉じる
-  vim.api.nvim_buf_set_keymap(bufnr, 'n', 'q', [[<cmd>bdelete<CR>]], opts)
+  set_keymap(bufnr, 'n', 'q', [[<cmd>bdelete<CR>]], opts)
   
   -- m: 新しいメッセージを送信
-  vim.api.nvim_buf_set_keymap(bufnr, 'n', 'm', [[<cmd>lua require('neo-slack.ui').send_new_message()<CR>]], opts)
+  set_keymap(bufnr, 'n', 'm', [[<cmd>lua require('neo-slack.ui').send_new_message()<CR>]], opts)
+end
+
+-- 現在の行からメッセージIDを取得
+---@param line_nr number|nil 行番号（nilの場合は現在の行）
+---@return string|nil メッセージID
+local function get_message_ts_at_line(line_nr)
+  line_nr = line_nr or vim.api.nvim_win_get_cursor(0)[1]
+  local bufnr = vim.api.nvim_get_current_buf()
+  
+  -- 現在の行から上に遡って、メッセージIDを探す
+  for i = line_nr, 1, -1 do
+    local ok, ts = pcall(vim.api.nvim_buf_get_var, bufnr, 'message_' .. i)
+    if ok then
+      return ts
+    end
+  end
+  
+  return nil
 end
 
 -- チャンネルを選択
@@ -247,7 +287,7 @@ function M.select_channel()
       channel_name = "選択したチャンネル"
     end
     
-    vim.notify('Neo-Slack: ' .. channel_name .. ' を選択しました', vim.log.levels.INFO)
+    notify(channel_name .. ' を選択しました', vim.log.levels.INFO)
     
     -- チャンネルのメッセージを表示
     require('neo-slack').list_messages(channel_id)
@@ -256,7 +296,7 @@ function M.select_channel()
     local channel_name = line:match('[✓%s][#🔒]%s+([%w-_]+)')
     
     if not channel_name then
-      vim.notify('Neo-Slack: チャンネルを選択できませんでした', vim.log.levels.ERROR)
+      notify('チャンネルを選択できませんでした', vim.log.levels.ERROR)
       return
     end
     
@@ -267,21 +307,10 @@ end
 
 -- メッセージに返信
 function M.reply_to_message()
-  local line_nr = vim.api.nvim_win_get_cursor(0)[1]
-  local bufnr = vim.api.nvim_get_current_buf()
-  
-  -- 現在の行から上に遡って、メッセージIDを探す
-  local message_ts = nil
-  for i = line_nr, 1, -1 do
-    local ok, ts = pcall(vim.api.nvim_buf_get_var, bufnr, 'message_' .. i)
-    if ok then
-      message_ts = ts
-      break
-    end
-  end
+  local message_ts = get_message_ts_at_line()
   
   if not message_ts then
-    vim.notify('Neo-Slack: 返信するメッセージが見つかりませんでした', vim.log.levels.ERROR)
+    notify('返信するメッセージが見つかりませんでした', vim.log.levels.ERROR)
     return
   end
   
@@ -295,21 +324,10 @@ end
 
 -- メッセージにリアクションを追加
 function M.add_reaction_to_message()
-  local line_nr = vim.api.nvim_win_get_cursor(0)[1]
-  local bufnr = vim.api.nvim_get_current_buf()
-  
-  -- 現在の行から上に遡って、メッセージIDを探す
-  local message_ts = nil
-  for i = line_nr, 1, -1 do
-    local ok, ts = pcall(vim.api.nvim_buf_get_var, bufnr, 'message_' .. i)
-    if ok then
-      message_ts = ts
-      break
-    end
-  end
+  local message_ts = get_message_ts_at_line()
   
   if not message_ts then
-    vim.notify('Neo-Slack: リアクションを追加するメッセージが見つかりませんでした', vim.log.levels.ERROR)
+    notify('リアクションを追加するメッセージが見つかりませんでした', vim.log.levels.ERROR)
     return
   end
   
@@ -326,7 +344,7 @@ function M.upload_file_to_channel()
   local channel = vim.g.neo_slack_current_channel_id
   
   if not channel then
-    vim.notify('Neo-Slack: チャンネルが選択されていません', vim.log.levels.ERROR)
+    notify('チャンネルが選択されていません', vim.log.levels.ERROR)
     return
   end
   
@@ -343,7 +361,7 @@ function M.refresh_messages()
   local channel = vim.g.neo_slack_current_channel_id
   
   if not channel then
-    vim.notify('Neo-Slack: チャンネルが選択されていません', vim.log.levels.ERROR)
+    notify('チャンネルが選択されていません', vim.log.levels.ERROR)
     return
   end
   
@@ -355,7 +373,7 @@ function M.send_new_message()
   local channel = vim.g.neo_slack_current_channel_id
   
   if not channel then
-    vim.notify('Neo-Slack: チャンネルが選択されていません', vim.log.levels.ERROR)
+    notify('チャンネルが選択されていません', vim.log.levels.ERROR)
     return
   end
   

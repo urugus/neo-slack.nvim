@@ -1,11 +1,20 @@
--- neo-slack 通知モジュール
--- 新しいメッセージやメンションの通知を処理します
+---@brief [[
+--- neo-slack 通知モジュール
+--- 新しいメッセージやメンションの通知を処理します
+---@brief ]]
 
 local api = require('neo-slack.api')
+local utils = require('neo-slack.utils')
 
+---@class NeoSlackNotification
 local M = {}
 
 -- 通知設定
+---@class NotificationConfig
+---@field enabled boolean 通知が有効かどうか
+---@field refresh_interval number 更新間隔（秒）
+---@field last_check table チャンネルごとの最終チェック時間
+---@field timer userdata|nil タイマーオブジェクト
 M.config = {
   enabled = true,
   refresh_interval = 30, -- 秒
@@ -13,7 +22,18 @@ M.config = {
   timer = nil,           -- タイマーオブジェクト
 }
 
+-- 通知ヘルパー関数
+---@param message string 通知メッセージ
+---@param level number 通知レベル
+---@param opts table|nil 追加オプション
+local function notify(message, level, opts)
+  opts = opts or {}
+  opts.title = opts.title or 'Neo-Slack'
+  utils.notify(message, level, opts)
+end
+
 -- 通知システムの初期化
+---@param refresh_interval number|nil 更新間隔（秒）
 function M.setup(refresh_interval)
   M.config.refresh_interval = refresh_interval or 30
   
@@ -39,7 +59,7 @@ function M.start_notification_timer()
     M.check_for_notifications()
   end))
   
-  vim.notify('Neo-Slack: 通知システムを開始しました（更新間隔: ' .. M.config.refresh_interval .. '秒）', vim.log.levels.INFO)
+  notify('通知システムを開始しました（更新間隔: ' .. M.config.refresh_interval .. '秒）', vim.log.levels.INFO)
 end
 
 -- 通知タイマーを停止
@@ -47,14 +67,44 @@ function M.stop_notification_timer()
   if M.config.timer then
     M.config.timer:stop()
     M.config.timer = nil
-    vim.notify('Neo-Slack: 通知システムを停止しました', vim.log.levels.INFO)
+    notify('通知システムを停止しました', vim.log.levels.INFO)
   end
+end
+
+-- メッセージ内のメンションをチェック
+---@param message table メッセージオブジェクト
+---@param user_id string ユーザーID
+---@return boolean メンションされているかどうか
+local function is_user_mentioned(message, user_id)
+  -- テキスト内のメンションをチェック
+  if message.text and message.text:match('<@' .. user_id .. '>') then
+    return true
+  end
+  
+  -- メンション情報をチェック
+  if message.blocks then
+    for _, block in ipairs(message.blocks) do
+      if block.elements then
+        for _, element in ipairs(block.elements) do
+          if element.elements then
+            for _, sub_element in ipairs(element.elements) do
+              if sub_element.type == 'user' and sub_element.user_id == user_id then
+                return true
+              end
+            end
+          end
+        end
+      end
+    end
+  end
+  
+  return false
 end
 
 -- 通知をチェック
 function M.check_for_notifications()
   -- ユーザー情報が取得できていない場合はスキップ
-  if not api.config.user_info then
+  if not api.config.user_info or not api.config.user_info.user then
     return
   end
   
@@ -74,6 +124,7 @@ function M.check_for_notifications()
 end
 
 -- チャンネルの通知をチェック
+---@param channel table チャンネルオブジェクト
 function M.check_channel_for_notifications(channel)
   -- 最終チェック時間を取得
   local last_ts = M.config.last_check[channel.id] or 0
@@ -117,29 +168,7 @@ function M.check_channel_for_notifications(channel)
       end
       
       -- メンションをチェック
-      local is_mentioned = false
-      
-      -- テキスト内のメンションをチェック
-      if message.text and message.text:match('<@' .. user_id .. '>') then
-        is_mentioned = true
-      end
-      
-      -- メンション情報をチェック
-      if message.blocks then
-        for _, block in ipairs(message.blocks) do
-          if block.elements then
-            for _, element in ipairs(block.elements) do
-              if element.elements then
-                for _, sub_element in ipairs(element.elements) do
-                  if sub_element.type == 'user' and sub_element.user_id == user_id then
-                    is_mentioned = true
-                  end
-                end
-              end
-            end
-          end
-        end
-      end
+      local is_mentioned = is_user_mentioned(message, user_id)
       
       -- DMをチェック
       if channel.is_im then
@@ -163,6 +192,7 @@ function M.check_channel_for_notifications(channel)
 end
 
 -- 通知を表示
+---@param notifications table[] 通知オブジェクトの配列
 function M.show_notifications(notifications)
   if #notifications == 0 then
     return
@@ -197,7 +227,7 @@ function M.show_notifications(notifications)
     )
     
     -- 通知を表示
-    vim.notify(notify_message, vim.log.levels.INFO, {
+    notify(notify_message, vim.log.levels.INFO, {
       title = 'Neo-Slack',
       icon = '💬',
     })
@@ -208,14 +238,14 @@ end
 function M.enable()
   M.config.enabled = true
   M.setup(M.config.refresh_interval)
-  vim.notify('Neo-Slack: 通知を有効化しました', vim.log.levels.INFO)
+  notify('通知を有効化しました', vim.log.levels.INFO)
 end
 
 -- 通知を無効化
 function M.disable()
   M.config.enabled = false
   M.stop_notification_timer()
-  vim.notify('Neo-Slack: 通知を無効化しました', vim.log.levels.INFO)
+  notify('通知を無効化しました', vim.log.levels.INFO)
 end
 
 -- 通知の状態を切り替え

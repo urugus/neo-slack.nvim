@@ -1,13 +1,13 @@
--- neo-slack API モジュール
--- Slack APIとの通信を処理します
+---@brief [[
+--- neo-slack API モジュール
+--- Slack APIとの通信を処理します
+---@brief ]]
 
 local curl = require('plenary.curl')
--- プラグインのバージョンによっては plenary.json が利用できない場合があります
--- 代わりに vim.json を使用します
-local json = {}
-json.encode = vim.json.encode
-json.decode = vim.json.decode
+local json = { encode = vim.json.encode, decode = vim.json.decode }
+local utils = require('neo-slack.utils')
 
+---@class NeoSlackAPI
 local M = {}
 
 -- API設定
@@ -18,15 +18,46 @@ M.config = {
   user_info = nil,
 }
 
+---@class APIResponse
+---@field success boolean 成功したかどうか
+---@field data table|nil 成功時のデータ
+---@field error string|nil エラー時のメッセージ
+
+---@class APICallback
+---@field (fun(success: boolean, data: table|nil): nil)
+
+-- 通知ヘルパー関数
+---@param message string 通知メッセージ
+---@param level number 通知レベル
+local function notify(message, level)
+  vim.notify('Neo-Slack: ' .. message, level)
+end
+
+-- パラメータ内のブール値を文字列に変換
+---@param params table パラメータテーブル
+---@return table 変換後のパラメータテーブル
+local function convert_bool_to_string(params)
+  local result = {}
+  for k, v in pairs(params) do
+    if type(v) == "boolean" then
+      result[k] = v and "true" or "false"
+    else
+      result[k] = v
+    end
+  end
+  return result
+end
+
 -- APIの初期化
+---@param token string Slack APIトークン
 function M.setup(token)
   M.config.token = token
   
   -- チーム情報を取得
   M.get_team_info(function(success, data)
-    if success then
+    if success and data and data.team then
       M.config.team_info = data
-      vim.notify('Neo-Slack: ' .. data.team.name .. 'に接続しました', vim.log.levels.INFO)
+      notify(data.team.name .. 'に接続しました', vim.log.levels.INFO)
     end
   end)
   
@@ -39,6 +70,10 @@ function M.setup(token)
 end
 
 -- APIリクエストを実行
+---@param method string HTTPメソッド ('GET' or 'POST')
+---@param endpoint string APIエンドポイント
+---@param params table|nil リクエストパラメータ
+---@param callback function コールバック関数
 function M.request(method, endpoint, params, callback)
   params = params or {}
   
@@ -76,14 +111,7 @@ function M.request(method, endpoint, params, callback)
   if method == 'GET' then
     -- GETリクエストの場合、パラメータをURLクエリパラメータとして送信
     -- ブール値を文字列に変換（plenary.curlはブール値を処理できない）
-    local string_params = {}
-    for k, v in pairs(params) do
-      if type(v) == "boolean" then
-        string_params[k] = v and "true" or "false"
-      else
-        string_params[k] = v
-      end
-    end
+    local string_params = convert_bool_to_string(params)
     curl.get(url, vim.tbl_extend('force', opts, { query = string_params }))
   elseif method == 'POST' then
     -- POSTリクエストの場合、パラメータをJSONボディとして送信
@@ -94,21 +122,25 @@ function M.request(method, endpoint, params, callback)
 end
 
 -- 接続テスト
+---@param callback function コールバック関数
 function M.test_connection(callback)
   M.request('GET', 'auth.test', {}, callback)
 end
 
 -- チーム情報を取得
+---@param callback function コールバック関数
 function M.get_team_info(callback)
   M.request('GET', 'team.info', {}, callback)
 end
 
 -- ユーザー情報を取得
+---@param callback function コールバック関数
 function M.get_user_info(callback)
   M.request('GET', 'users.identity', {}, callback)
 end
 
 -- チャンネル一覧を取得
+---@param callback function コールバック関数
 function M.get_channels(callback)
   local params = {
     exclude_archived = true,
@@ -120,19 +152,40 @@ function M.get_channels(callback)
     if success then
       callback(true, data.channels)
     else
-      -- エラーの詳細をログに出力
-      vim.notify('Neo-Slack: チャンネル一覧の取得に失敗しました - ' .. (data.error or 'Unknown error'), vim.log.levels.ERROR)
+      local error_msg = data.error or 'Unknown error'
+      
+      -- 権限エラーの場合、より詳細な情報を提供
+      if error_msg == 'missing_scope' then
+        -- ユーザートークン（xoxp-）を使用するための情報を追加
+        notify('チャンネル一覧の取得に失敗しました - 権限不足 (missing_scope)\n' ..
+               'Slackトークンに必要な権限がありません。\n' ..
+               '必要な権限: channels:read, groups:read, im:read, mpim:read\n' ..
+               'ユーザー自身として送信するには、ボットトークン（xoxb-）ではなく\n' ..
+               'ユーザートークン（xoxp-）を使用してください。\n' ..
+               '1. https://api.slack.com/apps にアクセス\n' ..
+               '2. アプリを選択または新規作成\n' ..
+               '3. 左メニューから「OAuth & Permissions」を選択\n' ..
+               '4. 「User Token Scopes」に必要な権限を追加\n' ..
+               '5. 「Install to Workspace」でアプリをインストール\n' ..
+               '6. 「User OAuth Token」をコピー（xoxp-で始まるトークン）\n' ..
+               '7. `:SlackResetToken`コマンドでトークンを設定', vim.log.levels.ERROR)
+      else
+        notify('チャンネル一覧の取得に失敗しました - ' .. error_msg, vim.log.levels.ERROR)
+      end
+      
       callback(false, data)
     end
   end)
 end
 
 -- メッセージ一覧を取得
+---@param channel string チャンネル名またはID
+---@param callback function コールバック関数
 function M.get_messages(channel, callback)
   -- チャンネルIDを取得（チャンネル名が指定された場合）
   M.get_channel_id(channel, function(channel_id)
     if not channel_id then
-      vim.notify('Neo-Slack: チャンネルが見つかりません: ' .. channel, vim.log.levels.ERROR)
+      notify('チャンネルが見つかりません: ' .. channel, vim.log.levels.ERROR)
       callback(false, { error = 'チャンネルが見つかりません: ' .. channel })
       return
     end
@@ -147,7 +200,19 @@ function M.get_messages(channel, callback)
       if success then
         callback(true, data.messages)
       else
-        vim.notify('Neo-Slack: メッセージの取得に失敗しました - ' .. (data.error or 'Unknown error'), vim.log.levels.ERROR)
+        local error_msg = data.error or 'Unknown error'
+        
+        -- 権限エラーの場合、より詳細な情報を提供
+        if error_msg == 'missing_scope' then
+          notify('メッセージの取得に失敗しました - 権限不足 (missing_scope)\n' ..
+                 'Slackトークンに必要な権限がありません。\n' ..
+                 '必要な権限: channels:history, groups:history, im:history, mpim:history\n' ..
+                 'https://api.slack.com/apps で以下の権限を追加してください:\n' ..
+                 '- User Token Scopes: channels:history, groups:history, im:history, mpim:history', vim.log.levels.ERROR)
+        else
+          notify('メッセージの取得に失敗しました - ' .. error_msg, vim.log.levels.ERROR)
+        end
+        
         callback(false, data)
       end
     end)
@@ -155,6 +220,8 @@ function M.get_messages(channel, callback)
 end
 
 -- チャンネル名からチャンネルIDを取得
+---@param channel_name string チャンネル名
+---@param callback function コールバック関数
 function M.get_channel_id(channel_name, callback)
   -- すでにIDの場合はそのまま返す
   if channel_name:match('^[A-Z0-9]+$') then
@@ -165,7 +232,7 @@ function M.get_channel_id(channel_name, callback)
   -- チャンネル一覧から検索
   M.get_channels(function(success, channels)
     if not success then
-      vim.notify('Neo-Slack: チャンネル一覧の取得に失敗したため、チャンネルIDを特定できません', vim.log.levels.ERROR)
+      notify('チャンネル一覧の取得に失敗したため、チャンネルIDを特定できません', vim.log.levels.ERROR)
       callback(nil)
       return
     end
@@ -177,16 +244,20 @@ function M.get_channel_id(channel_name, callback)
       end
     end
     
-    vim.notify('Neo-Slack: チャンネル "' .. channel_name .. '" が見つかりません', vim.log.levels.ERROR)
+    notify('チャンネル "' .. channel_name .. '" が見つかりません', vim.log.levels.ERROR)
     callback(nil)
   end)
 end
 
 -- メッセージを送信
+---@param channel string チャンネル名またはID
+---@param text string メッセージテキスト
+---@param callback function コールバック関数
 function M.send_message(channel, text, callback)
   -- チャンネルIDを取得
   M.get_channel_id(channel, function(channel_id)
     if not channel_id then
+      notify('チャンネルが見つかりません: ' .. channel, vim.log.levels.ERROR)
       callback(false)
       return
     end
@@ -196,19 +267,28 @@ function M.send_message(channel, text, callback)
       text = text,
     }
     
-    M.request('POST', 'chat.postMessage', params, function(success, _)
-      callback(success)
+    M.request('POST', 'chat.postMessage', params, function(success, data)
+      if success then
+        notify('メッセージを送信しました', vim.log.levels.INFO)
+        callback(true)
+      else
+        notify('メッセージの送信に失敗しました - ' .. (data.error or 'Unknown error'), vim.log.levels.ERROR)
+        callback(false)
+      end
     end)
   end)
 end
 
 -- メッセージに返信
+---@param message_ts string メッセージのタイムスタンプ
+---@param text string 返信テキスト
+---@param callback function コールバック関数
 function M.reply_message(message_ts, text, callback)
   -- メッセージのチャンネルIDを取得
   local channel_id = vim.g.neo_slack_current_channel_id
   
   if not channel_id then
-    vim.notify('Neo-Slack: 現在のチャンネルIDが設定されていません。メッセージ一覧を表示してから返信してください。', vim.log.levels.ERROR)
+    notify('現在のチャンネルIDが設定されていません。メッセージ一覧を表示してから返信してください。', vim.log.levels.ERROR)
     callback(false)
     return
   end
@@ -221,21 +301,25 @@ function M.reply_message(message_ts, text, callback)
   
   M.request('POST', 'chat.postMessage', params, function(success, data)
     if success then
+      notify('返信を送信しました', vim.log.levels.INFO)
       callback(true)
     else
-      vim.notify('Neo-Slack: 返信の送信に失敗しました - ' .. (data.error or 'Unknown error'), vim.log.levels.ERROR)
+      notify('返信の送信に失敗しました - ' .. (data.error or 'Unknown error'), vim.log.levels.ERROR)
       callback(false)
     end
   end)
 end
 
 -- リアクションを追加
+---@param message_ts string メッセージのタイムスタンプ
+---@param emoji string 絵文字名
+---@param callback function コールバック関数
 function M.add_reaction(message_ts, emoji, callback)
   -- メッセージのチャンネルIDを取得
   local channel_id = vim.g.neo_slack_current_channel_id
   
   if not channel_id then
-    vim.notify('Neo-Slack: 現在のチャンネルIDが設定されていません。メッセージ一覧を表示してからリアクションを追加してください。', vim.log.levels.ERROR)
+    notify('現在のチャンネルIDが設定されていません。メッセージ一覧を表示してからリアクションを追加してください。', vim.log.levels.ERROR)
     callback(false)
     return
   end
@@ -251,19 +335,24 @@ function M.add_reaction(message_ts, emoji, callback)
   
   M.request('POST', 'reactions.add', params, function(success, data)
     if success then
+      notify('リアクションを追加しました', vim.log.levels.INFO)
       callback(true)
     else
-      vim.notify('Neo-Slack: リアクションの追加に失敗しました - ' .. (data.error or 'Unknown error'), vim.log.levels.ERROR)
+      notify('リアクションの追加に失敗しました - ' .. (data.error or 'Unknown error'), vim.log.levels.ERROR)
       callback(false)
     end
   end)
 end
 
 -- ファイルをアップロード
+---@param channel string チャンネル名またはID
+---@param file_path string ファイルパス
+---@param callback function コールバック関数
 function M.upload_file(channel, file_path, callback)
   -- チャンネルIDを取得
   M.get_channel_id(channel, function(channel_id)
     if not channel_id then
+      notify('チャンネルが見つかりません: ' .. channel, vim.log.levels.ERROR)
       callback(false)
       return
     end
@@ -271,7 +360,7 @@ function M.upload_file(channel, file_path, callback)
     -- ファイルの存在確認
     local file = io.open(file_path, 'r')
     if not file then
-      vim.notify('Neo-Slack: ファイルが見つかりません: ' .. file_path, vim.log.levels.ERROR)
+      notify('ファイルが見つかりません: ' .. file_path, vim.log.levels.ERROR)
       callback(false)
       return
     end
@@ -290,8 +379,10 @@ function M.upload_file(channel, file_path, callback)
     vim.fn.jobstart(cmd, {
       on_exit = function(_, exit_code)
         if exit_code == 0 then
+          notify('ファイルをアップロードしました', vim.log.levels.INFO)
           callback(true)
         else
+          notify('ファイルのアップロードに失敗しました', vim.log.levels.ERROR)
           callback(false)
         end
       end
