@@ -39,10 +39,21 @@ function M.setup(opts)
     M.config.notification = vim.g.neo_slack_notification == 1
   end
   
-  -- トークンが設定されているか確認
+  -- トークンの取得を試みる（優先順位: 1.設定パラメータ 2.保存済みトークン 3.ユーザー入力）
   if M.config.token == '' then
-    vim.notify('Neo-Slack: Slackトークンが設定されていません。', vim.log.levels.ERROR)
-    return
+    -- ストレージからトークンを読み込み
+    local storage = require('neo-slack.storage')
+    local saved_token = storage.load_token()
+    
+    if saved_token then
+      M.config.token = saved_token
+      vim.notify('Neo-Slack: 保存されたトークンを読み込みました', vim.log.levels.INFO)
+    else
+      -- トークンの入力を求める
+      vim.notify('Neo-Slack: Slackトークンが必要です', vim.log.levels.INFO)
+      M.prompt_for_token()
+      return -- プロンプト後に再度setup()が呼ばれるため、ここで終了
+    end
   end
   
   -- APIクライアントの初期化
@@ -54,6 +65,55 @@ function M.setup(opts)
   end
   
   vim.notify('Neo-Slack: 初期化完了', vim.log.levels.INFO)
+end
+
+-- トークン入力を促す
+function M.prompt_for_token()
+  vim.ui.input({
+    prompt = 'Slack APIトークンを入力してください: ',
+    default = '',
+    completion = 'file',
+    highlight = function()
+      vim.api.nvim_buf_add_highlight(0, -1, 'Question', 0, 0, -1)
+    end
+  }, function(input)
+    if not input or input == '' then
+      vim.notify('Neo-Slack: トークンが入力されませんでした。プラグインは初期化されません。', vim.log.levels.WARN)
+      return
+    end
+    
+    -- トークンの検証
+    M.validate_and_save_token(input)
+  end)
+end
+
+-- トークンを検証して保存
+function M.validate_and_save_token(token)
+  local api = require('neo-slack.api')
+  
+  -- 一時的にトークンを設定してテスト
+  api.setup(token)
+  api.test_connection(function(success, data)
+    if success then
+      -- トークンを保存
+      local storage = require('neo-slack.storage')
+      if storage.save_token(token) then
+        vim.notify('Neo-Slack: トークンを保存しました', vim.log.levels.INFO)
+        
+        -- 設定を更新して初期化を続行
+        M.config.token = token
+        M.setup(M.config)
+      else
+        vim.notify('Neo-Slack: トークンの保存に失敗しました', vim.log.levels.ERROR)
+      end
+    else
+      vim.notify('Neo-Slack: 無効なトークンです - ' .. (data.error or 'Unknown error'), vim.log.levels.ERROR)
+      -- 再度入力を促す
+      vim.defer_fn(function()
+        M.prompt_for_token()
+      end, 1000)
+    end
+  end)
 end
 
 -- Slackの接続状態を表示
@@ -219,6 +279,17 @@ function M.upload_file(channel, file_path)
       end
     end)
   end
+end
+
+-- トークンを削除
+function M.delete_token()
+  local storage = require('neo-slack.storage')
+  if storage.delete_token() then
+    M.config.token = ''
+    vim.notify('Neo-Slack: 保存されたトークンを削除しました', vim.log.levels.INFO)
+    return true
+  end
+  return false
 end
 
 return M

@@ -61,10 +61,24 @@ packer.nvimを使用する場合:
 ==============================================================================
 3. 設定                                                  *neo-slack-configuration*
 
+*トークン管理*
+
+Neo-Slackは初回起動時に自動的にSlack APIトークンの入力を求めます。
+入力されたトークンは安全にローカルに保存され、次回以降の起動時に自動的に
+読み込まれます。
+
+トークンはNeovimの設定ファイルに直接記載する必要はありません。
+これにより、公開リポジトリに誤ってトークンを含めてしまうリスクを軽減できます。
+
+トークンは以下の場所に保存されます:
+>
+    ~/.local/share/nvim/neo-slack/token (Unix系)
+    ~/AppData/Local/nvim-data/neo-slack/token (Windows)
+<
+
 Vimスクリプトでの設定:
 >
-    " 基本設定
-    let g:neo_slack_token = 'xoxp-your-slack-token'
+    " 基本設定（トークンは自動的に管理されるため設定不要）
     let g:neo_slack_default_channel = 'general'
     let g:neo_slack_refresh_interval = 30
     let g:neo_slack_notification = 1
@@ -78,7 +92,7 @@ Vimスクリプトでの設定:
 Luaでの設定:
 >
     require('neo-slack').setup({
-      token = 'xoxp-your-slack-token',
+      -- トークンは自動的に管理されるため設定不要
       default_channel = 'general',
       refresh_interval = 30, -- メッセージ更新間隔（秒）
       notification = true,   -- 通知を有効にする
@@ -92,11 +106,26 @@ Luaでの設定:
     })
 <
 
+*トークンの手動設定（オプション）*
+
+自動トークン管理を使用せず、従来通り設定ファイルでトークンを指定することもできます:
+>
+    " Vimスクリプトの場合
+    let g:neo_slack_token = 'xoxp-your-slack-token'
+<
+>
+    -- Luaの場合
+    require('neo-slack').setup({
+      token = 'xoxp-your-slack-token',
+      -- その他の設定...
+    })
+<
+
 設定オプション:
 
 `token`                Slack APIトークン
                       Slackアプリの設定ページから取得できます。
-                      必須項目です。
+                      自動トークン管理を使用する場合は設定不要です。
 
 `default_channel`      デフォルトのチャンネル名
                       コマンド実行時にチャンネルを指定しない場合に使用されます。
@@ -117,6 +146,9 @@ Luaでの設定:
 4. 使用方法                                              *neo-slack-usage*
 
 4.1 コマンド                                            *neo-slack-commands*
+
+`:SlackSetup`          プラグインを初期化します。
+                      自動初期化が無効の場合や、初期化に失敗した場合に使用します。
 
 `:SlackStatus`         Slackの接続状態を表示します。
 
@@ -141,6 +173,12 @@ Luaでの設定:
 `:SlackUpload [channel] [file_path]`
                       指定したチャンネルにファイルをアップロードします。
                       引数を省略すると、インタラクティブに入力を求められます。
+
+`:SlackSetToken`       Slack APIトークンを設定（再設定）します。
+                      既存のトークンがある場合は上書きされます。
+
+`:SlackDeleteToken`    保存されたトークンを削除します。
+                      次回プラグイン起動時に再度トークン入力が求められます。
 
 4.2 キーマッピング                                      *neo-slack-keymaps*
 
@@ -181,8 +219,17 @@ Luaでの設定:
 ==============================================================================
 6. トラブルシューティング                                *neo-slack-troubleshooting*
 
+問題: プラグインのコマンドが認識されない（例: `Not an editor command: SlackSetToken`）
+解決: プラグインが正しく初期化されていない可能性があります。以下の手順を試してください:
+      1. `:SlackSetup` コマンドを実行してプラグインを手動で初期化
+      2. Neovimを再起動
+      3. プラグインが正しくインストールされているか確認
+      4. プラグインのパスがruntimepathに含まれているか確認
+         `:lua print(vim.inspect(vim.api.nvim_list_runtime_paths()))`
+
 問題: プラグインがSlackに接続できない
 解決: APIトークンが正しく設定されているか確認してください。
+      `:SlackSetToken` コマンドを使用して、トークンを再設定してみてください。
       また、トークンに必要な権限（スコープ）が付与されているか確認してください。
 
 問題: メッセージが表示されない
@@ -192,6 +239,10 @@ Luaでの設定:
 問題: 通知が表示されない
 解決: 通知設定が有効になっているか確認してください。
       また、Neovimの通知システムが正しく動作しているか確認してください。
+
+問題: トークンが保存されない
+解決: `:SlackSetToken` コマンドを使用して、トークンを手動で設定してみてください。
+      また、Neovimのデータディレクトリに書き込み権限があるか確認してください。
 
 詳細なデバッグ情報を表示するには:
 >

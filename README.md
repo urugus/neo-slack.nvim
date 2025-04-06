@@ -41,15 +41,49 @@ use {
 }
 ```
 
+### lazy.nvimを使用する場合
+
+```lua
+{
+  'username/neo-slack',
+  dependencies = { 'nvim-lua/plenary.nvim' },
+  config = function()
+    -- オプション: 明示的に初期化
+    require('neo-slack').setup()
+  end
+}
+```
+
+### インストール後の確認
+
+プラグインが正しくインストールされているか確認するには、Neovimで以下のコマンドを実行します：
+
+```
+:lua print(vim.inspect(package.loaded['neo-slack']))
+```
+
+`nil`が表示される場合は、プラグインがまだロードされていません。その場合は以下のコマンドを実行してください：
+
+```
+:SlackSetup
+```
+
+これにより、プラグインが初期化され、`:SlackSetToken`などのコマンドが使用可能になります。
+
 ## 設定方法
 
 `init.vim`または`init.lua`に以下の設定を追加してください。
 
+### トークン管理
+
+Neo-Slackは初回起動時に自動的にSlack APIトークンの入力を求めます。入力されたトークンは安全にローカルに保存され、次回以降の起動時に自動的に読み込まれます。
+
+トークンはNeovimの設定ファイルに直接記載する必要はありません。これにより、公開リポジトリに誤ってトークンを含めてしまうリスクを軽減できます。
+
 ### Vimスクリプトの場合
 
 ```vim
-" 基本設定
-let g:neo_slack_token = 'xoxp-your-slack-token'
+" 基本設定（トークンは自動的に管理されるため設定不要）
 let g:neo_slack_default_channel = 'general'
 
 " キーマッピング
@@ -62,7 +96,7 @@ nnoremap <leader>sm :SlackMessages<CR>
 
 ```lua
 require('neo-slack').setup({
-  token = 'xoxp-your-slack-token',
+  -- トークンは自動的に管理されるため設定不要
   default_channel = 'general',
   refresh_interval = 30, -- メッセージ更新間隔（秒）
   notification = true,   -- 通知を有効にする
@@ -76,10 +110,28 @@ require('neo-slack').setup({
 })
 ```
 
+### トークンの手動設定（オプション）
+
+自動トークン管理を使用せず、従来通り設定ファイルでトークンを指定することもできます：
+
+```vim
+" Vimスクリプトの場合
+let g:neo_slack_token = 'xoxp-your-slack-token'
+```
+
+```lua
+-- Luaの場合
+require('neo-slack').setup({
+  token = 'xoxp-your-slack-token',
+  -- その他の設定...
+})
+```
+
 ## 使用方法
 
 ### 基本コマンド
 
+- `:SlackSetup` - プラグインを初期化（自動初期化が無効の場合や、初期化に失敗した場合に使用）
 - `:SlackStatus` - Slackの接続状態を表示
 - `:SlackChannels` - チャンネル一覧を表示
 - `:SlackMessages [channel]` - 指定したチャンネルのメッセージを表示
@@ -87,6 +139,8 @@ require('neo-slack').setup({
 - `:SlackReply [message_ts] [reply]` - メッセージにリプライ
 - `:SlackReact [message_ts] [emoji]` - メッセージにリアクションを追加
 - `:SlackUpload [channel] [file_path]` - ファイルをアップロード
+- `:SlackSetToken` - Slack APIトークンを設定（再設定）
+- `:SlackDeleteToken` - 保存されたトークンを削除
 
 ### キーマッピング（デフォルト）
 
@@ -100,6 +154,8 @@ require('neo-slack').setup({
 ## 開発ロードマップ
 
 - [x] 基本設計
+- [x] トークン自動管理機能
+- [ ] プラグイン初期化の改善
 - [ ] Slack API連携
 - [ ] チャンネル表示機能
 - [ ] メッセージ表示機能
