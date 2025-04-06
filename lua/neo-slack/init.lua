@@ -310,8 +310,14 @@ function M.reply_message(message_ts, ...)
     api.reply_message(message_ts, text, function(success)
       -- 成功/失敗の通知はAPI層で行われる
       if success then
-        -- 現在表示中のメッセージ一覧を更新
-        M.list_messages(channel_id)
+        -- スレッドが表示されている場合は、スレッド一覧を更新
+        local current_thread_ts = state.get_current_thread()
+        if current_thread_ts == message_ts then
+          M.list_thread_replies(message_ts)
+        else
+          -- 現在表示中のメッセージ一覧を更新
+          M.list_messages(channel_id)
+        end
       end
     end)
   end
@@ -326,6 +332,45 @@ function M.reply_message(message_ts, ...)
   else
     do_reply(reply)
   end
+end
+
+--------------------------------------------------
+-- スレッド関連の関数
+--------------------------------------------------
+
+--- スレッド返信一覧を取得して表示
+--- @param thread_ts string スレッドの親メッセージのタイムスタンプ
+--- @return nil
+function M.list_thread_replies(thread_ts)
+  local channel_id = state.get_current_channel()
+  
+  if not channel_id then
+    notify('現在のチャンネルが設定されていません。メッセージ一覧を表示してからスレッドを表示してください。', vim.log.levels.ERROR)
+    return
+  end
+  
+  -- スレッド返信を取得
+  api.get_thread_replies(channel_id, thread_ts, function(success, replies, parent_message)
+    if success then
+      -- 状態にスレッド情報を保存
+      state.set_current_thread(thread_ts, parent_message)
+      state.set_thread_messages(thread_ts, replies)
+      
+      -- UIにスレッド返信を表示
+      ui.show_thread_replies(thread_ts, replies, parent_message)
+    else
+      notify('スレッド返信の取得に失敗しました', vim.log.levels.ERROR)
+    end
+  end)
+end
+
+--- スレッドに返信
+--- @param thread_ts string スレッドの親メッセージのタイムスタンプ
+--- @param ... string 返信テキスト（複数の引数は連結される）
+--- @return nil
+function M.reply_to_thread(thread_ts, ...)
+  -- スレッドへの返信は通常の返信と同じ処理
+  M.reply_message(thread_ts, ...)
 end
 
 --------------------------------------------------
@@ -349,8 +394,14 @@ function M.add_reaction(message_ts, emoji)
     api.add_reaction(message_ts, reaction, function(success)
       -- 成功/失敗の通知はAPI層で行われる
       if success then
-        -- 現在表示中のメッセージ一覧を更新
-        M.list_messages(channel_id)
+        -- スレッドが表示されている場合は、スレッド一覧を更新
+        local current_thread_ts = state.get_current_thread()
+        if current_thread_ts then
+          M.list_thread_replies(current_thread_ts)
+        else
+          -- 現在表示中のメッセージ一覧を更新
+          M.list_messages(channel_id)
+        end
       end
     end)
   end

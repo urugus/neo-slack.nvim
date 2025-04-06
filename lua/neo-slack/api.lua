@@ -346,6 +346,62 @@ function M.get_messages(channel, callback)
   end)
 end
 
+--- スレッド返信を取得
+--- @param channel string チャンネル名またはID
+--- @param thread_ts string スレッドの親メッセージのタイムスタンプ
+--- @param callback function コールバック関数
+--- @return nil
+function M.get_thread_replies(channel, thread_ts, callback)
+  -- チャンネルIDを取得（チャンネル名が指定された場合）
+  M.get_channel_id(channel, function(channel_id)
+    if not channel_id then
+      notify('チャンネルが見つかりません: ' .. channel, vim.log.levels.ERROR)
+      callback(false, { error = 'チャンネルが見つかりません: ' .. channel })
+      return
+    end
+    
+    local params = {
+      channel = channel_id,
+      ts = thread_ts,
+      limit = 100,
+      inclusive = true
+    }
+    
+    M.request('GET', 'conversations.replies', params, function(success, data)
+      if success then
+        -- 最初のメッセージは親メッセージなので、返信のみを返す
+        if #data.messages > 1 then
+          -- 親メッセージを保存
+          local parent_message = data.messages[1]
+          -- 2番目以降のメッセージ（返信）を返す
+          local replies = {}
+          for i = 2, #data.messages do
+            table.insert(replies, data.messages[i])
+          end
+          callback(true, replies, parent_message)
+        else
+          callback(true, {}, data.messages[1])
+        end
+      else
+        local error_msg = data.error or 'Unknown error'
+        
+        -- 権限エラーの場合、より詳細な情報を提供
+        if error_msg == 'missing_scope' then
+          notify('スレッド返信の取得に失敗しました - 権限不足 (missing_scope)\n' ..
+                 'Slackトークンに必要な権限がありません。\n' ..
+                 '必要な権限: channels:history, groups:history, im:history, mpim:history\n' ..
+                 'https://api.slack.com/apps で以下の権限を追加してください:\n' ..
+                 '- User Token Scopes: channels:history, groups:history, im:history, mpim:history', vim.log.levels.ERROR)
+        else
+          notify('スレッド返信の取得に失敗しました - ' .. error_msg, vim.log.levels.ERROR)
+        end
+        
+        callback(false, data)
+      end
+    end)
+  end)
+end
+
 --- メッセージを送信
 --- @param channel string チャンネル名またはID
 --- @param text string メッセージテキスト
