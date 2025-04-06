@@ -2,7 +2,11 @@
 -- Slack APIとの通信を処理します
 
 local curl = require('plenary.curl')
-local json = require('plenary.json')
+-- プラグインのバージョンによっては plenary.json が利用できない場合があります
+-- 代わりに vim.json を使用します
+local json = {}
+json.encode = vim.json.encode
+json.decode = vim.json.decode
 
 local M = {}
 
