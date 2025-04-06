@@ -1,0 +1,216 @@
+*neo-slack.txt*  NeovimからSlackを操作するためのプラグイン
+
+                      Neo-Slack プラグイン
+
+==============================================================================
+目次                                                      *neo-slack-contents*
+
+1. 概要                                                  |neo-slack-overview|
+2. インストール                                          |neo-slack-installation|
+3. 設定                                                  |neo-slack-configuration|
+4. 使用方法                                              |neo-slack-usage|
+   4.1 コマンド                                          |neo-slack-commands|
+   4.2 キーマッピング                                    |neo-slack-keymaps|
+5. カスタマイズ                                          |neo-slack-customization|
+6. トラブルシューティング                                |neo-slack-troubleshooting|
+7. 開発                                                  |neo-slack-development|
+
+==============================================================================
+1. 概要                                                  *neo-slack-overview*
+
+Neo-Slackは、Neovimから直接Slackを操作できるプラグインです。
+このプラグインを使用することで、Neovimのエディタ環境を離れることなく
+Slackでのコミュニケーションが可能になります。
+
+主な機能:
+- Slackワークスペースへの接続・認証
+- チャンネル一覧の表示と選択
+- メッセージの閲覧
+- メッセージの送信
+- メッセージへの返信
+- リアクションの追加・削除
+- DMの送受信
+- メンション通知
+- ファイルのアップロード
+- スレッド表示
+- 検索機能
+- キーボードショートカットによる操作
+
+==============================================================================
+2. インストール                                          *neo-slack-installation*
+
+前提条件:
+- Neovim 0.5.0以上
+- plenary.nvim (https://github.com/nvim-lua/plenary.nvim)
+- telescope.nvim (オプション、検索機能向上のため)
+
+vim-plugを使用する場合:
+>
+    Plug 'nvim-lua/plenary.nvim'
+    Plug 'username/neo-slack'
+<
+
+packer.nvimを使用する場合:
+>
+    use {
+      'username/neo-slack',
+      requires = { 'nvim-lua/plenary.nvim' }
+    }
+<
+
+==============================================================================
+3. 設定                                                  *neo-slack-configuration*
+
+Vimスクリプトでの設定:
+>
+    " 基本設定
+    let g:neo_slack_token = 'xoxp-your-slack-token'
+    let g:neo_slack_default_channel = 'general'
+    let g:neo_slack_refresh_interval = 30
+    let g:neo_slack_notification = 1
+    
+    " キーマッピング
+    nnoremap <leader>ss :SlackStatus<CR>
+    nnoremap <leader>sc :SlackChannels<CR>
+    nnoremap <leader>sm :SlackMessages<CR>
+<
+
+Luaでの設定:
+>
+    require('neo-slack').setup({
+      token = 'xoxp-your-slack-token',
+      default_channel = 'general',
+      refresh_interval = 30, -- メッセージ更新間隔（秒）
+      notification = true,   -- 通知を有効にする
+      keymaps = {
+        toggle = '<leader>ss',
+        channels = '<leader>sc',
+        messages = '<leader>sm',
+        reply = '<leader>sr',
+        react = '<leader>se',
+      }
+    })
+<
+
+設定オプション:
+
+`token`                Slack APIトークン
+                      Slackアプリの設定ページから取得できます。
+                      必須項目です。
+
+`default_channel`      デフォルトのチャンネル名
+                      コマンド実行時にチャンネルを指定しない場合に使用されます。
+                      デフォルト: 'general'
+
+`refresh_interval`     更新間隔（秒）
+                      通知やメッセージの自動更新間隔を指定します。
+                      デフォルト: 30
+
+`notification`         通知の有効/無効
+                      新しいメッセージやメンションの通知を有効にするかどうか。
+                      デフォルト: true
+
+`keymaps`             キーマッピング設定
+                      各機能に割り当てるキーを指定します。
+
+==============================================================================
+4. 使用方法                                              *neo-slack-usage*
+
+4.1 コマンド                                            *neo-slack-commands*
+
+`:SlackStatus`         Slackの接続状態を表示します。
+
+`:SlackChannels`       チャンネル一覧を表示します。
+
+`:SlackMessages [channel]`
+                      指定したチャンネルのメッセージを表示します。
+                      チャンネルを指定しない場合は、デフォルトチャンネルが使用されます。
+
+`:SlackSend [channel] [message]`
+                      指定したチャンネルにメッセージを送信します。
+                      引数を省略すると、インタラクティブに入力を求められます。
+
+`:SlackReply [message_ts] [reply]`
+                      指定したメッセージにリプライします。
+                      引数を省略すると、インタラクティブに入力を求められます。
+
+`:SlackReact [message_ts] [emoji]`
+                      指定したメッセージにリアクションを追加します。
+                      引数を省略すると、インタラクティブに入力を求められます。
+
+`:SlackUpload [channel] [file_path]`
+                      指定したチャンネルにファイルをアップロードします。
+                      引数を省略すると、インタラクティブに入力を求められます。
+
+4.2 キーマッピング                                      *neo-slack-keymaps*
+
+チャンネル一覧バッファ内:
+
+`<CR>`                選択したチャンネルのメッセージを表示します。
+`r`                   チャンネル一覧を更新します。
+`q`                   バッファを閉じます。
+
+メッセージ一覧バッファ内:
+
+`r`                   選択したメッセージに返信します。
+`e`                   選択したメッセージにリアクションを追加します。
+`u`                   現在のチャンネルにファイルをアップロードします。
+`R`                   メッセージ一覧を更新します。
+`m`                   新しいメッセージを送信します。
+`q`                   バッファを閉じます。
+
+==============================================================================
+5. カスタマイズ                                          *neo-slack-customization*
+
+バッファの表示方法をカスタマイズするには、filetype用のシンタックスハイライトを
+定義します。
+
+例: ~/.config/nvim/after/syntax/neo-slack-messages.vim
+>
+    syntax match neoSlackHeader /^### .*/
+    syntax match neoSlackReaction /^> :.*/
+    syntax match neoSlackThread /^> スレッド.*/
+    syntax match neoSlackDivider /^---$/
+    
+    highlight default link neoSlackHeader Title
+    highlight default link neoSlackReaction Special
+    highlight default link neoSlackThread Comment
+    highlight default link neoSlackDivider NonText
+<
+
+==============================================================================
+6. トラブルシューティング                                *neo-slack-troubleshooting*
+
+問題: プラグインがSlackに接続できない
+解決: APIトークンが正しく設定されているか確認してください。
+      また、トークンに必要な権限（スコープ）が付与されているか確認してください。
+
+問題: メッセージが表示されない
+解決: デフォルトチャンネルが正しく設定されているか確認してください。
+      また、そのチャンネルにアクセス権があるか確認してください。
+
+問題: 通知が表示されない
+解決: 通知設定が有効になっているか確認してください。
+      また、Neovimの通知システムが正しく動作しているか確認してください。
+
+詳細なデバッグ情報を表示するには:
+>
+    :lua require('neo-slack').setup({debug = true})
+<
+
+==============================================================================
+7. 開発                                                  *neo-slack-development*
+
+バグ報告や機能リクエストは、GitHubリポジトリのIssueページにお願いします:
+https://github.com/username/neo-slack/issues
+
+プルリクエストも歓迎します。開発に参加する場合は、以下の手順に従ってください:
+
+1. リポジトリをフォークする
+2. 機能開発用のブランチを作成する
+3. 変更をコミットする
+4. テストを追加する
+5. プルリクエストを作成する
+
+==============================================================================
+vim:tw=78:ts=8:ft=help:norl:
