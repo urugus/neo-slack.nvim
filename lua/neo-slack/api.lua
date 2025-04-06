@@ -44,14 +44,12 @@ function M.request(method, endpoint, params, callback)
   
   local headers = {
     Authorization = 'Bearer ' .. M.config.token,
-    ['Content-Type'] = 'application/json; charset=utf-8',
   }
   
   local url = M.config.base_url .. endpoint
   
   local opts = {
     headers = headers,
-    body = json.encode(params),
     callback = function(response)
       if response.status ~= 200 then
         vim.schedule(function()
@@ -76,8 +74,21 @@ function M.request(method, endpoint, params, callback)
   }
   
   if method == 'GET' then
-    curl.get(url, opts)
+    -- GETリクエストの場合、パラメータをURLクエリパラメータとして送信
+    -- ブール値を文字列に変換（plenary.curlはブール値を処理できない）
+    local string_params = {}
+    for k, v in pairs(params) do
+      if type(v) == "boolean" then
+        string_params[k] = v and "true" or "false"
+      else
+        string_params[k] = v
+      end
+    end
+    curl.get(url, vim.tbl_extend('force', opts, { query = string_params }))
   elseif method == 'POST' then
+    -- POSTリクエストの場合、パラメータをJSONボディとして送信
+    opts.headers['Content-Type'] = 'application/json; charset=utf-8'
+    opts.body = json.encode(params)
     curl.post(url, opts)
   end
 end
@@ -102,12 +113,15 @@ function M.get_channels(callback)
   local params = {
     exclude_archived = true,
     types = 'public_channel,private_channel',
+    limit = 1000  -- より多くのチャンネルを取得
   }
   
   M.request('GET', 'conversations.list', params, function(success, data)
     if success then
       callback(true, data.channels)
     else
+      -- エラーの詳細をログに出力
+      vim.notify('Neo-Slack: チャンネル一覧の取得に失敗しました - ' .. (data.error or 'Unknown error'), vim.log.levels.ERROR)
       callback(false, data)
     end
   end)
@@ -118,6 +132,7 @@ function M.get_messages(channel, callback)
   -- チャンネルIDを取得（チャンネル名が指定された場合）
   M.get_channel_id(channel, function(channel_id)
     if not channel_id then
+      vim.notify('Neo-Slack: チャンネルが見つかりません: ' .. channel, vim.log.levels.ERROR)
       callback(false, { error = 'チャンネルが見つかりません: ' .. channel })
       return
     end
@@ -125,12 +140,14 @@ function M.get_messages(channel, callback)
     local params = {
       channel = channel_id,
       limit = 50,
+      inclusive = true
     }
     
     M.request('GET', 'conversations.history', params, function(success, data)
       if success then
         callback(true, data.messages)
       else
+        vim.notify('Neo-Slack: メッセージの取得に失敗しました - ' .. (data.error or 'Unknown error'), vim.log.levels.ERROR)
         callback(false, data)
       end
     end)
@@ -148,6 +165,7 @@ function M.get_channel_id(channel_name, callback)
   -- チャンネル一覧から検索
   M.get_channels(function(success, channels)
     if not success then
+      vim.notify('Neo-Slack: チャンネル一覧の取得に失敗したため、チャンネルIDを特定できません', vim.log.levels.ERROR)
       callback(nil)
       return
     end
@@ -159,6 +177,7 @@ function M.get_channel_id(channel_name, callback)
       end
     end
     
+    vim.notify('Neo-Slack: チャンネル "' .. channel_name .. '" が見つかりません', vim.log.levels.ERROR)
     callback(nil)
   end)
 end
@@ -185,11 +204,11 @@ end
 
 -- メッセージに返信
 function M.reply_message(message_ts, text, callback)
-  -- メッセージのチャンネルIDを取得（現在の実装では簡略化）
-  -- 実際の実装では、UIモジュールから現在のチャンネルIDを取得する必要があります
+  -- メッセージのチャンネルIDを取得
   local channel_id = vim.g.neo_slack_current_channel_id
   
   if not channel_id then
+    vim.notify('Neo-Slack: 現在のチャンネルIDが設定されていません。メッセージ一覧を表示してから返信してください。', vim.log.levels.ERROR)
     callback(false)
     return
   end
@@ -200,17 +219,23 @@ function M.reply_message(message_ts, text, callback)
     thread_ts = message_ts,
   }
   
-  M.request('POST', 'chat.postMessage', params, function(success, _)
-    callback(success)
+  M.request('POST', 'chat.postMessage', params, function(success, data)
+    if success then
+      callback(true)
+    else
+      vim.notify('Neo-Slack: 返信の送信に失敗しました - ' .. (data.error or 'Unknown error'), vim.log.levels.ERROR)
+      callback(false)
+    end
   end)
 end
 
 -- リアクションを追加
 function M.add_reaction(message_ts, emoji, callback)
-  -- メッセージのチャンネルIDを取得（現在の実装では簡略化）
+  -- メッセージのチャンネルIDを取得
   local channel_id = vim.g.neo_slack_current_channel_id
   
   if not channel_id then
+    vim.notify('Neo-Slack: 現在のチャンネルIDが設定されていません。メッセージ一覧を表示してからリアクションを追加してください。', vim.log.levels.ERROR)
     callback(false)
     return
   end
@@ -224,8 +249,13 @@ function M.add_reaction(message_ts, emoji, callback)
     name = emoji,
   }
   
-  M.request('POST', 'reactions.add', params, function(success, _)
-    callback(success)
+  M.request('POST', 'reactions.add', params, function(success, data)
+    if success then
+      callback(true)
+    else
+      vim.notify('Neo-Slack: リアクションの追加に失敗しました - ' .. (data.error or 'Unknown error'), vim.log.levels.ERROR)
+      callback(false)
+    end
   end)
 end
 

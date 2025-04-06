@@ -83,10 +83,17 @@ function M.check_channel_for_notifications(channel)
     channel = channel.id,
     limit = 10,
     oldest = last_ts,
+    inclusive = true
   }
   
   api.request('GET', 'conversations.history', params, function(success, data)
-    if not success or not data.messages or #data.messages == 0 then
+    if not success then
+      -- エラーが発生した場合は静かに失敗（通知システムなのでエラーメッセージは表示しない）
+      return
+    end
+    
+    if not data.messages or #data.messages == 0 then
+      -- 新しいメッセージがない場合
       return
     end
     

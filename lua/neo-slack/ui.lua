@@ -234,16 +234,35 @@ function M.select_channel()
   local line_nr = vim.api.nvim_win_get_cursor(0)[1]
   local bufnr = vim.api.nvim_get_current_buf()
   
-  -- チャンネル名を抽出
-  local channel_name = line:match('[#🔒] ([%w-_]+)')
+  -- チャンネルIDを直接取得（行番号から）
+  local ok, channel_id = pcall(vim.api.nvim_buf_get_var, bufnr, 'channel_' .. line_nr)
   
-  if not channel_name then
-    vim.notify('Neo-Slack: チャンネルを選択できませんでした', vim.log.levels.ERROR)
-    return
+  if ok and channel_id then
+    -- チャンネルIDを直接使用
+    vim.g.neo_slack_current_channel_id = channel_id
+    
+    -- チャンネル名を抽出（表示用）
+    local channel_name = line:match('[#🔒]%s+([%w-_]+)')
+    if not channel_name then
+      channel_name = "選択したチャンネル"
+    end
+    
+    vim.notify('Neo-Slack: ' .. channel_name .. ' を選択しました', vim.log.levels.INFO)
+    
+    -- チャンネルのメッセージを表示
+    require('neo-slack').list_messages(channel_id)
+  else
+    -- 従来の方法でチャンネル名を抽出
+    local channel_name = line:match('[✓%s][#🔒]%s+([%w-_]+)')
+    
+    if not channel_name then
+      vim.notify('Neo-Slack: チャンネルを選択できませんでした', vim.log.levels.ERROR)
+      return
+    end
+    
+    -- チャンネルのメッセージを表示
+    require('neo-slack').list_messages(channel_name)
   end
-  
-  -- チャンネルのメッセージを表示
-  require('neo-slack').list_messages(channel_name)
 end
 
 -- メッセージに返信
