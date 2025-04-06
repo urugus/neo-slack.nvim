@@ -6,11 +6,19 @@
 local curl = require('plenary.curl')
 local json = { encode = vim.json.encode, decode = vim.json.decode }
 local utils = require('neo-slack.utils')
+local state = require('neo-slack.state')
 
 ---@class NeoSlackAPI
+---@field config APIConfig API設定
+---@field users_cache table ユーザー情報のキャッシュ
 local M = {}
 
 -- API設定
+---@class APIConfig
+---@field base_url string APIのベースURL
+---@field token string Slack APIトークン
+---@field team_info table|nil チーム情報
+---@field user_info table|nil ユーザー情報
 M.config = {
   base_url = 'https://slack.com/api/',
   token = '',
@@ -51,8 +59,13 @@ local function convert_bool_to_string(params)
   return result
 end
 
--- APIの初期化
----@param token string Slack APIトークン
+--------------------------------------------------
+-- API初期化関連の関数
+--------------------------------------------------
+
+--- APIの初期化
+--- @param token string Slack APIトークン
+--- @return nil
 function M.setup(token)
   M.config.token = token
   
@@ -72,11 +85,12 @@ function M.setup(token)
   end)
 end
 
--- APIリクエストを実行
----@param method string HTTPメソッド ('GET' or 'POST')
----@param endpoint string APIエンドポイント
----@param params table|nil リクエストパラメータ
----@param callback function コールバック関数
+--- APIリクエストを実行
+--- @param method string HTTPメソッド ('GET' or 'POST')
+--- @param endpoint string APIエンドポイント
+--- @param params table|nil リクエストパラメータ
+--- @param callback function コールバック関数
+--- @return nil
 function M.request(method, endpoint, params, callback)
   params = params or {}
   
@@ -124,27 +138,35 @@ function M.request(method, endpoint, params, callback)
   end
 end
 
--- 接続テスト
----@param callback function コールバック関数
+--------------------------------------------------
+-- 接続・情報取得関連の関数
+--------------------------------------------------
+
+--- 接続テスト
+--- @param callback function コールバック関数
+--- @return nil
 function M.test_connection(callback)
   M.request('GET', 'auth.test', {}, callback)
 end
 
--- チーム情報を取得
----@param callback function コールバック関数
+--- チーム情報を取得
+--- @param callback function コールバック関数
+--- @return nil
 function M.get_team_info(callback)
   M.request('GET', 'team.info', {}, callback)
 end
 
--- ユーザー情報を取得
----@param callback function コールバック関数
+--- ユーザー情報を取得
+--- @param callback function コールバック関数
+--- @return nil
 function M.get_user_info(callback)
   M.request('GET', 'users.identity', {}, callback)
 end
 
--- 特定のユーザーIDからユーザー情報を取得
----@param user_id string ユーザーID
----@param callback function コールバック関数
+--- 特定のユーザーIDからユーザー情報を取得
+--- @param user_id string ユーザーID
+--- @param callback function コールバック関数
+--- @return nil
 function M.get_user_info_by_id(user_id, callback)
   -- キャッシュにユーザー情報があれば、それを返す
   if M.users_cache[user_id] then
@@ -172,9 +194,10 @@ function M.get_user_info_by_id(user_id, callback)
   end)
 end
 
--- ユーザーIDからユーザー名を取得（非同期）
----@param user_id string ユーザーID
----@param callback function コールバック関数
+--- ユーザーIDからユーザー名を取得（非同期）
+--- @param user_id string ユーザーID
+--- @param callback function コールバック関数
+--- @return nil
 function M.get_username(user_id, callback)
   M.get_user_info_by_id(user_id, function(success, user_data)
     if success and user_data then
@@ -192,8 +215,13 @@ function M.get_username(user_id, callback)
   end)
 end
 
--- チャンネル一覧を取得
----@param callback function コールバック関数
+--------------------------------------------------
+-- チャンネル関連の関数
+--------------------------------------------------
+
+--- チャンネル一覧を取得
+--- @param callback function コールバック関数
+--- @return nil
 function M.get_channels(callback)
   local params = {
     exclude_archived = true,
@@ -231,9 +259,55 @@ function M.get_channels(callback)
   end)
 end
 
--- メッセージ一覧を取得
----@param channel string チャンネル名またはID
----@param callback function コールバック関数
+--- チャンネル名からチャンネルIDを取得
+--- @param channel_name string チャンネル名
+--- @param callback function コールバック関数
+--- @return nil
+function M.get_channel_id(channel_name, callback)
+  -- すでにIDの場合はそのまま返す
+  if channel_name:match('^[A-Z0-9]+$') then
+    callback(channel_name)
+    return
+  end
+  
+  -- 状態からチャンネルIDを取得
+  local channel_id = state.get_channel_id_by_name(channel_name)
+  if channel_id then
+    callback(channel_id)
+    return
+  end
+  
+  -- チャンネル一覧から検索
+  M.get_channels(function(success, channels)
+    if not success then
+      notify('チャンネル一覧の取得に失敗したため、チャンネルIDを特定できません', vim.log.levels.ERROR)
+      callback(nil)
+      return
+    end
+    
+    -- 状態にチャンネル一覧を保存
+    state.set_channels(channels)
+    
+    for _, channel in ipairs(channels) do
+      if channel.name == channel_name then
+        callback(channel.id)
+        return
+      end
+    end
+    
+    notify('チャンネル "' .. channel_name .. '" が見つかりません', vim.log.levels.ERROR)
+    callback(nil)
+  end)
+end
+
+--------------------------------------------------
+-- メッセージ関連の関数
+--------------------------------------------------
+
+--- メッセージ一覧を取得
+--- @param channel string チャンネル名またはID
+--- @param callback function コールバック関数
+--- @return nil
 function M.get_messages(channel, callback)
   -- チャンネルIDを取得（チャンネル名が指定された場合）
   M.get_channel_id(channel, function(channel_id)
@@ -272,40 +346,11 @@ function M.get_messages(channel, callback)
   end)
 end
 
--- チャンネル名からチャンネルIDを取得
----@param channel_name string チャンネル名
----@param callback function コールバック関数
-function M.get_channel_id(channel_name, callback)
-  -- すでにIDの場合はそのまま返す
-  if channel_name:match('^[A-Z0-9]+$') then
-    callback(channel_name)
-    return
-  end
-  
-  -- チャンネル一覧から検索
-  M.get_channels(function(success, channels)
-    if not success then
-      notify('チャンネル一覧の取得に失敗したため、チャンネルIDを特定できません', vim.log.levels.ERROR)
-      callback(nil)
-      return
-    end
-    
-    for _, channel in ipairs(channels) do
-      if channel.name == channel_name then
-        callback(channel.id)
-        return
-      end
-    end
-    
-    notify('チャンネル "' .. channel_name .. '" が見つかりません', vim.log.levels.ERROR)
-    callback(nil)
-  end)
-end
-
--- メッセージを送信
----@param channel string チャンネル名またはID
----@param text string メッセージテキスト
----@param callback function コールバック関数
+--- メッセージを送信
+--- @param channel string チャンネル名またはID
+--- @param text string メッセージテキスト
+--- @param callback function コールバック関数
+--- @return nil
 function M.send_message(channel, text, callback)
   -- チャンネルIDを取得
   M.get_channel_id(channel, function(channel_id)
@@ -332,13 +377,14 @@ function M.send_message(channel, text, callback)
   end)
 end
 
--- メッセージに返信
----@param message_ts string メッセージのタイムスタンプ
----@param text string 返信テキスト
----@param callback function コールバック関数
+--- メッセージに返信
+--- @param message_ts string メッセージのタイムスタンプ
+--- @param text string 返信テキスト
+--- @param callback function コールバック関数
+--- @return nil
 function M.reply_message(message_ts, text, callback)
-  -- メッセージのチャンネルIDを取得
-  local channel_id = vim.g.neo_slack_current_channel_id
+  -- 状態から現在のチャンネルIDを取得
+  local channel_id = state.get_current_channel()
   
   if not channel_id then
     notify('現在のチャンネルIDが設定されていません。メッセージ一覧を表示してから返信してください。', vim.log.levels.ERROR)
@@ -363,13 +409,18 @@ function M.reply_message(message_ts, text, callback)
   end)
 end
 
--- リアクションを追加
----@param message_ts string メッセージのタイムスタンプ
----@param emoji string 絵文字名
----@param callback function コールバック関数
+--------------------------------------------------
+-- リアクション関連の関数
+--------------------------------------------------
+
+--- リアクションを追加
+--- @param message_ts string メッセージのタイムスタンプ
+--- @param emoji string 絵文字名
+--- @param callback function コールバック関数
+--- @return nil
 function M.add_reaction(message_ts, emoji, callback)
-  -- メッセージのチャンネルIDを取得
-  local channel_id = vim.g.neo_slack_current_channel_id
+  -- 状態から現在のチャンネルIDを取得
+  local channel_id = state.get_current_channel()
   
   if not channel_id then
     notify('現在のチャンネルIDが設定されていません。メッセージ一覧を表示してからリアクションを追加してください。', vim.log.levels.ERROR)
@@ -397,10 +448,15 @@ function M.add_reaction(message_ts, emoji, callback)
   end)
 end
 
--- ファイルをアップロード
----@param channel string チャンネル名またはID
----@param file_path string ファイルパス
----@param callback function コールバック関数
+--------------------------------------------------
+-- ファイル関連の関数
+--------------------------------------------------
+
+--- ファイルをアップロード
+--- @param channel string チャンネル名またはID
+--- @param file_path string ファイルパス
+--- @param callback function コールバック関数
+--- @return nil
 function M.upload_file(channel, file_path, callback)
   -- チャンネルIDを取得
   M.get_channel_id(channel, function(channel_id)

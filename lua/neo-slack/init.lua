@@ -8,8 +8,10 @@ local ui = require('neo-slack.ui')
 local storage = require('neo-slack.storage')
 local utils = require('neo-slack.utils')
 local notification = require('neo-slack.notification')
+local state = require('neo-slack.state')
 
 ---@class NeoSlack
+---@field config NeoSlackConfig 設定オブジェクト
 local M = {}
 
 -- デフォルト設定
@@ -42,8 +44,13 @@ local function notify(message, level)
   utils.notify(message, level)
 end
 
--- プラグインの初期化
----@param opts table|nil 設定オプション
+--------------------------------------------------
+-- 初期化と設定関連の関数
+--------------------------------------------------
+
+--- プラグインの初期化
+--- @param opts table|nil 設定オプション
+--- @return boolean 初期化に成功したかどうか
 function M.setup(opts)
   opts = opts or {}
   M.config = utils.deep_merge(M.config, opts)
@@ -81,7 +88,7 @@ function M.setup(opts)
       -- トークンの入力を求める
       notify('Slackトークンが必要です', vim.log.levels.INFO)
       M.prompt_for_token()
-      return -- プロンプト後に再度setup()が呼ばれるため、ここで終了
+      return false -- プロンプト後に再度setup()が呼ばれるため、ここで終了
     end
   end
   
@@ -93,14 +100,36 @@ function M.setup(opts)
     notification.setup(M.config.refresh_interval)
   end
   
+  -- 状態を初期化済みに設定
+  state.set_initialized(true)
+  
   notify('初期化完了', vim.log.levels.INFO)
   
   if M.config.debug then
     notify('デバッグモードが有効です', vim.log.levels.INFO)
   end
+  
+  return true
 end
 
--- トークン入力を促す
+--- Slackの接続状態を表示
+--- @return nil
+function M.status()
+  api.test_connection(function(success, data)
+    if success then
+      notify('接続成功 - ワークスペース: ' .. (data.team or 'Unknown'), vim.log.levels.INFO)
+    else
+      notify('接続失敗 - ' .. (data.error or 'Unknown error'), vim.log.levels.ERROR)
+    end
+  end)
+end
+
+--------------------------------------------------
+-- トークン管理関連の関数
+--------------------------------------------------
+
+--- トークン入力を促す
+--- @return nil
 function M.prompt_for_token()
   vim.ui.input({
     prompt = 'Slack APIトークンを入力してください: ',
@@ -120,8 +149,9 @@ function M.prompt_for_token()
   end)
 end
 
--- トークンを検証して保存
----@param token string Slack APIトークン
+--- トークンを検証して保存
+--- @param token string Slack APIトークン
+--- @return nil
 function M.validate_and_save_token(token)
   -- 一時的にトークンを設定してテスト
   api.setup(token)
@@ -147,21 +177,45 @@ function M.validate_and_save_token(token)
   end)
 end
 
--- Slackの接続状態を表示
-function M.status()
-  api.test_connection(function(success, data)
-    if success then
-      notify('接続成功 - ワークスペース: ' .. (data.team or 'Unknown'), vim.log.levels.INFO)
-    else
-      notify('接続失敗 - ' .. (data.error or 'Unknown error'), vim.log.levels.ERROR)
+--- トークンを削除
+--- @param prompt_new boolean|nil 新しいトークンの入力を促すかどうか
+--- @return boolean 削除に成功したかどうか
+function M.delete_token(prompt_new)
+  if storage.delete_token() then
+    M.config.token = ''
+    notify('保存されたトークンを削除しました', vim.log.levels.INFO)
+    
+    -- 新しいトークンの入力を促す
+    if prompt_new then
+      vim.defer_fn(function()
+        notify('新しいSlackトークンを入力してください', vim.log.levels.INFO)
+        M.prompt_for_token()
+      end, 1000)
     end
-  end)
+    
+    return true
+  end
+  return false
 end
 
--- チャンネル一覧を表示
+--- トークンを再設定
+--- @return boolean 削除に成功したかどうか
+function M.reset_token()
+  return M.delete_token(true)
+end
+
+--------------------------------------------------
+-- チャンネル関連の関数
+--------------------------------------------------
+
+--- チャンネル一覧を取得して表示
+--- @return nil
 function M.list_channels()
   api.get_channels(function(success, channels)
     if success then
+      -- 状態にチャンネル一覧を保存
+      state.set_channels(channels)
+      -- UIにチャンネル一覧を表示
       ui.show_channels(channels)
     else
       notify('チャンネル一覧の取得に失敗しました', vim.log.levels.ERROR)
@@ -169,13 +223,36 @@ function M.list_channels()
   end)
 end
 
--- メッセージ一覧を表示
----@param channel string|nil チャンネル名またはID
+--- チャンネルを選択
+--- @param channel_id string チャンネルID
+--- @param channel_name string|nil チャンネル名
+--- @return nil
+function M.select_channel(channel_id, channel_name)
+  -- 状態に現在のチャンネルを設定
+  state.set_current_channel(channel_id, channel_name)
+  -- チャンネルのメッセージを表示
+  M.list_messages(channel_id)
+end
+
+--------------------------------------------------
+-- メッセージ関連の関数
+--------------------------------------------------
+
+--- メッセージ一覧を取得して表示
+--- @param channel string|nil チャンネル名またはID
+--- @return nil
 function M.list_messages(channel)
-  channel = channel or M.config.default_channel
+  -- チャンネルが指定されていない場合は、現在のチャンネルまたはデフォルトチャンネルを使用
+  local channel_id, channel_name = state.get_current_channel()
+  channel = channel or channel_id or M.config.default_channel
   
   api.get_messages(channel, function(success, messages)
     if success then
+      -- 状態にメッセージを保存
+      if type(channel) == 'string' then
+        state.set_messages(channel, messages)
+      end
+      -- UIにメッセージを表示
       ui.show_messages(channel, messages)
     else
       notify('メッセージの取得に失敗しました', vim.log.levels.ERROR)
@@ -183,11 +260,14 @@ function M.list_messages(channel)
   end)
 end
 
--- メッセージを送信
----@param channel string|nil チャンネル名またはID
----@param ... string メッセージテキスト（複数の引数は連結される）
+--- メッセージを送信
+--- @param channel string|nil チャンネル名またはID
+--- @param ... string メッセージテキスト（複数の引数は連結される）
+--- @return nil
 function M.send_message(channel, ...)
-  channel = channel or M.config.default_channel
+  -- チャンネルが指定されていない場合は、現在のチャンネルまたはデフォルトチャンネルを使用
+  local channel_id = state.get_current_channel()
+  channel = channel or channel_id or M.config.default_channel
   local message = table.concat({...}, ' ')
   
   -- メッセージ送信処理
@@ -212,16 +292,27 @@ function M.send_message(channel, ...)
   end
 end
 
--- メッセージに返信
----@param message_ts string メッセージのタイムスタンプ
----@param ... string 返信テキスト（複数の引数は連結される）
+--- メッセージに返信
+--- @param message_ts string メッセージのタイムスタンプ
+--- @param ... string 返信テキスト（複数の引数は連結される）
+--- @return nil
 function M.reply_message(message_ts, ...)
   local reply = table.concat({...}, ' ')
+  local channel_id = state.get_current_channel()
+  
+  if not channel_id then
+    notify('現在のチャンネルが設定されていません。メッセージ一覧を表示してから返信してください。', vim.log.levels.ERROR)
+    return
+  end
   
   -- 返信処理
   local function do_reply(text)
     api.reply_message(message_ts, text, function(success)
       -- 成功/失敗の通知はAPI層で行われる
+      if success then
+        -- 現在表示中のメッセージ一覧を更新
+        M.list_messages(channel_id)
+      end
     end)
   end
   
@@ -237,14 +328,30 @@ function M.reply_message(message_ts, ...)
   end
 end
 
--- リアクションを追加
----@param message_ts string メッセージのタイムスタンプ
----@param emoji string|nil 絵文字名
+--------------------------------------------------
+-- リアクション関連の関数
+--------------------------------------------------
+
+--- リアクションを追加
+--- @param message_ts string メッセージのタイムスタンプ
+--- @param emoji string|nil 絵文字名
+--- @return nil
 function M.add_reaction(message_ts, emoji)
+  local channel_id = state.get_current_channel()
+  
+  if not channel_id then
+    notify('現在のチャンネルが設定されていません。メッセージ一覧を表示してからリアクションを追加してください。', vim.log.levels.ERROR)
+    return
+  end
+  
   -- リアクション追加処理
   local function do_react(reaction)
     api.add_reaction(message_ts, reaction, function(success)
       -- 成功/失敗の通知はAPI層で行われる
+      if success then
+        -- 現在表示中のメッセージ一覧を更新
+        M.list_messages(channel_id)
+      end
     end)
   end
   
@@ -260,16 +367,27 @@ function M.add_reaction(message_ts, emoji)
   end
 end
 
--- ファイルをアップロード
----@param channel string|nil チャンネル名またはID
----@param file_path string|nil ファイルパス
+--------------------------------------------------
+-- ファイル関連の関数
+--------------------------------------------------
+
+--- ファイルをアップロード
+--- @param channel string|nil チャンネル名またはID
+--- @param file_path string|nil ファイルパス
+--- @return nil
 function M.upload_file(channel, file_path)
-  channel = channel or M.config.default_channel
+  -- チャンネルが指定されていない場合は、現在のチャンネルまたはデフォルトチャンネルを使用
+  local channel_id = state.get_current_channel()
+  channel = channel or channel_id or M.config.default_channel
   
   -- ファイルアップロード処理
   local function do_upload(path)
     api.upload_file(channel, path, function(success)
       -- 成功/失敗の通知はAPI層で行われる
+      if success then
+        -- 現在表示中のメッセージ一覧を更新
+        M.list_messages(channel)
+      end
     end)
   end
   
@@ -283,32 +401,6 @@ function M.upload_file(channel, file_path)
   else
     do_upload(file_path)
   end
-end
-
--- トークンを削除
----@param prompt_new boolean|nil 新しいトークンの入力を促すかどうか
----@return boolean 削除に成功したかどうか
-function M.delete_token(prompt_new)
-  if storage.delete_token() then
-    M.config.token = ''
-    notify('保存されたトークンを削除しました', vim.log.levels.INFO)
-    
-    -- 新しいトークンの入力を促す
-    if prompt_new then
-      vim.defer_fn(function()
-        notify('新しいSlackトークンを入力してください', vim.log.levels.INFO)
-        M.prompt_for_token()
-      end, 1000)
-    end
-    
-    return true
-  end
-  return false
-end
-
--- トークンを再設定
-function M.reset_token()
-  M.delete_token(true)
 end
 
 return M
