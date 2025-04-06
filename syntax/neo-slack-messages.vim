@@ -46,7 +46,7 @@ syntax match neoSlackLink /<https\?:\/\/[^>]\+>/
 " 強調
 syntax match neoSlackBold /\*[^*]\+\*/
 syntax match neoSlackItalic /_[^_]\+_/
-syntax match neoSlackStrike /~[^~]\+~/
+syntax match neoSlackStrike /\~[^\~]\+\~/
 
 " ハイライトの定義
 highlight default link neoSlackMessagesHeader Title

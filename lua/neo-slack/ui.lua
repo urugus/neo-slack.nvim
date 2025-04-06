@@ -119,17 +119,30 @@ function M.show_messages(channel, messages)
     return tonumber(a.ts) < tonumber(b.ts)
   end)
   
+  -- ユーザー名とメッセージ行の対応を保存するテーブル
+  local user_message_lines = {}
+  
   -- メッセージ情報を追加
   for _, message in ipairs(messages) do
-    -- ユーザー名を取得（簡略化）
-    local username = message.user or 'unknown'
-    -- 実際の実装では、APIからユーザー名を取得する必要があります
+    -- 一時的にユーザーIDを表示（後で置き換える）
+    local user_id = message.user or 'unknown'
     
     -- 日時をフォーマット
     local timestamp = utils.format_timestamp(message.ts)
     
+    -- メッセージヘッダー行のインデックスを記録
+    local header_line_index = #lines + 1
+    
     -- メッセージヘッダー
-    table.insert(lines, string.format('### %s (%s)', username, timestamp))
+    table.insert(lines, string.format('### %s (%s)', user_id, timestamp))
+    
+    -- ユーザーIDと行番号の対応を保存
+    if user_id ~= 'unknown' then
+      if not user_message_lines[user_id] then
+        user_message_lines[user_id] = {}
+      end
+      table.insert(user_message_lines[user_id], header_line_index)
+    end
     
     -- メッセージ本文（複数行に対応）
     local text_lines = utils.split_lines(message.text)
@@ -169,6 +182,35 @@ function M.show_messages(channel, messages)
   
   -- バッファを表示
   vim.cmd('buffer ' .. bufnr)
+  
+  -- 非同期でユーザー名を取得して表示を更新
+  for user_id, line_indices in pairs(user_message_lines) do
+    api.get_username(user_id, function(username)
+      -- バッファが存在するか確認
+      if not vim.api.nvim_buf_is_valid(bufnr) then
+        return
+      end
+      
+      -- バッファを編集可能に設定
+      vim.api.nvim_buf_set_option(bufnr, 'modifiable', true)
+      
+      -- 各行を更新
+      for _, line_idx in ipairs(line_indices) do
+        -- 現在の行を取得
+        local line = vim.api.nvim_buf_get_lines(bufnr, line_idx - 1, line_idx, false)[1]
+        
+        -- ユーザーIDをユーザー名に置き換え（正規表現のメタ文字をエスケープ）
+        local escaped_user_id = user_id:gsub("([%^%$%(%)%%%.%[%]%*%+%-%?])", "%%%1")
+        local new_line = line:gsub(escaped_user_id, username)
+        
+        -- 行を更新
+        vim.api.nvim_buf_set_lines(bufnr, line_idx - 1, line_idx, false, {new_line})
+      end
+      
+      -- バッファを編集不可に戻す
+      vim.api.nvim_buf_set_option(bufnr, 'modifiable', false)
+    end)
+  end
 end
 
 -- バッファを取得または作成

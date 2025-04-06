@@ -18,6 +18,9 @@ M.config = {
   user_info = nil,
 }
 
+-- ユーザー情報のキャッシュ
+M.users_cache = {}
+
 ---@class APIResponse
 ---@field success boolean 成功したかどうか
 ---@field data table|nil 成功時のデータ
@@ -137,6 +140,56 @@ end
 ---@param callback function コールバック関数
 function M.get_user_info(callback)
   M.request('GET', 'users.identity', {}, callback)
+end
+
+-- 特定のユーザーIDからユーザー情報を取得
+---@param user_id string ユーザーID
+---@param callback function コールバック関数
+function M.get_user_info_by_id(user_id, callback)
+  -- キャッシュにユーザー情報があれば、それを返す
+  if M.users_cache[user_id] then
+    vim.schedule(function()
+      callback(true, M.users_cache[user_id])
+    end)
+    return
+  end
+  
+  -- APIからユーザー情報を取得
+  local params = {
+    user = user_id
+  }
+  
+  M.request('GET', 'users.info', params, function(success, data)
+    if success then
+      -- キャッシュに保存
+      M.users_cache[user_id] = data.user
+      callback(true, data.user)
+    else
+      local error_msg = data.error or 'Unknown error'
+      notify('ユーザー情報の取得に失敗しました - ' .. error_msg, vim.log.levels.WARN)
+      callback(false, data)
+    end
+  end)
+end
+
+-- ユーザーIDからユーザー名を取得（非同期）
+---@param user_id string ユーザーID
+---@param callback function コールバック関数
+function M.get_username(user_id, callback)
+  M.get_user_info_by_id(user_id, function(success, user_data)
+    if success and user_data then
+      local display_name = user_data.profile.display_name
+      local real_name = user_data.profile.real_name
+      
+      -- display_nameが空の場合はreal_nameを使用
+      local username = (display_name and display_name ~= '') and display_name or real_name
+      
+      callback(username)
+    else
+      -- 失敗した場合はユーザーIDをそのまま返す
+      callback(user_id)
+    end
+  end)
 end
 
 -- チャンネル一覧を取得
