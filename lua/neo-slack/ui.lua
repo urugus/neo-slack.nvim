@@ -42,7 +42,7 @@ end
 -- 分割レイアウトを設定
 ---@return nil
 function M.setup_split_layout()
-  -- 既存のウィンドウを閉じる
+  -- 既存のスレッドウィンドウを閉じる
   if M.layout.thread_win and vim.api.nvim_win_is_valid(M.layout.thread_win) then
     vim.api.nvim_win_close(M.layout.thread_win, true)
     M.layout.thread_win = nil
@@ -51,16 +51,21 @@ function M.setup_split_layout()
   
   -- チャンネル一覧用のウィンドウが存在しない場合は作成
   if not M.layout.channels_win or not vim.api.nvim_win_is_valid(M.layout.channels_win) then
-    -- 垂直分割
-    vim.cmd('vsplit')
-    -- 左側のウィンドウを取得
-    M.layout.channels_win = vim.api.nvim_get_current_win()
-    -- 幅を設定
-    vim.api.nvim_win_set_width(M.layout.channels_win, 30)
-    -- 右側のウィンドウに移動
-    vim.cmd('wincmd l')
-    -- 右側のウィンドウを取得
+    -- 現在のウィンドウを全画面に
+    vim.cmd('only')
+    
+    -- 現在のウィンドウをメッセージ用に設定
     M.layout.messages_win = vim.api.nvim_get_current_win()
+    
+    -- 左側に新しいウィンドウを作成（チャンネル一覧用）
+    vim.cmd('leftabove vsplit')
+    M.layout.channels_win = vim.api.nvim_get_current_win()
+    
+    -- チャンネル一覧の幅を設定
+    vim.api.nvim_win_set_width(M.layout.channels_win, 30)
+    
+    -- メッセージウィンドウに戻る
+    vim.cmd('wincmd l')
   end
 end
 
@@ -74,12 +79,25 @@ function M.setup_thread_layout()
   if not M.layout.thread_win or not vim.api.nvim_win_is_valid(M.layout.thread_win) then
     -- メッセージウィンドウにフォーカス
     vim.api.nvim_set_current_win(M.layout.messages_win)
-    -- 水平分割
-    vim.cmd('split')
-    -- 下側のウィンドウを取得
+    
+    -- 右側に新しいウィンドウを作成（スレッド用）
+    vim.cmd('rightbelow vsplit')
     M.layout.thread_win = vim.api.nvim_get_current_win()
-    -- 高さを設定
-    vim.api.nvim_win_set_height(M.layout.thread_win, vim.o.lines / 3)
+    
+    -- スレッドウィンドウとメッセージウィンドウの幅を調整
+    local total_width = vim.o.columns
+    local channels_width = 30
+    local remaining_width = total_width - channels_width
+    local thread_width = math.floor(remaining_width / 2)
+    
+    vim.api.nvim_win_set_width(M.layout.thread_win, thread_width)
+    
+    -- メッセージウィンドウに戻って幅を調整
+    vim.cmd('wincmd h')
+    vim.api.nvim_win_set_width(M.layout.messages_win, thread_width)
+    
+    -- スレッドウィンドウに戻る
+    vim.cmd('wincmd l')
   end
 end
 
