@@ -4,11 +4,12 @@
 ---@brief ]]
 
 local api = require('neo-slack.api')
-local ui = require('neo-slack.ui')
 local storage = require('neo-slack.storage')
 local utils = require('neo-slack.utils')
 local notification = require('neo-slack.notification')
 local state = require('neo-slack.state')
+-- ui モジュールは循環参照を避けるため、後で読み込む
+local ui
 
 ---@class NeoSlack
 ---@field config NeoSlackConfig 設定オブジェクト
@@ -453,5 +454,8 @@ function M.upload_file(channel, file_path)
     do_upload(file_path)
   end
 end
+
+-- 循環参照を避けるため、モジュールの最後でuiを読み込む
+ui = require('neo-slack.ui')
 
 return M

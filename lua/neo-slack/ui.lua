@@ -1,3 +1,171 @@
+---@brief [[
+--- neo-slack UI モジュール
+--- ユーザーインターフェースを構築します
+---@brief ]]
+
+local api = require('neo-slack.api')
+local utils = require('neo-slack.utils')
+local state = require('neo-slack.state')
+
+---@class NeoSlackUI
+---@field layout table レイアウト情報
+local M = {}
+
+-- レイアウト情報
+M.layout = {
+  channels_win = nil,
+  messages_win = nil,
+  thread_win = nil,
+  channels_buf = nil,
+  messages_buf = nil,
+  thread_buf = nil,
+}
+
+-- 通知ヘルパー関数
+---@param message string 通知メッセージ
+---@param level number 通知レベル
+local function notify(message, level)
+  vim.notify('Neo-Slack: ' .. message, level)
+end
+
+-- バッファオプションを設定
+---@param bufnr number バッファ番号
+---@param filetype string ファイルタイプ
+local function setup_buffer_options(bufnr, filetype)
+  vim.api.nvim_buf_set_option(bufnr, 'buftype', 'nofile')
+  vim.api.nvim_buf_set_option(bufnr, 'bufhidden', 'hide')
+  vim.api.nvim_buf_set_option(bufnr, 'swapfile', false)
+  vim.api.nvim_buf_set_option(bufnr, 'filetype', filetype)
+  vim.api.nvim_buf_set_option(bufnr, 'modifiable', true)
+end
+
+-- 分割レイアウトを設定
+---@return nil
+function M.setup_split_layout()
+  -- 既存のウィンドウを閉じる
+  if M.layout.thread_win and vim.api.nvim_win_is_valid(M.layout.thread_win) then
+    vim.api.nvim_win_close(M.layout.thread_win, true)
+    M.layout.thread_win = nil
+    M.layout.thread_buf = nil
+  end
+  
+  -- チャンネル一覧用のウィンドウが存在しない場合は作成
+  if not M.layout.channels_win or not vim.api.nvim_win_is_valid(M.layout.channels_win) then
+    -- 垂直分割
+    vim.cmd('vsplit')
+    -- 左側のウィンドウを取得
+    M.layout.channels_win = vim.api.nvim_get_current_win()
+    -- 幅を設定
+    vim.api.nvim_win_set_width(M.layout.channels_win, 30)
+    -- 右側のウィンドウに移動
+    vim.cmd('wincmd l')
+    -- 右側のウィンドウを取得
+    M.layout.messages_win = vim.api.nvim_get_current_win()
+  end
+end
+
+-- スレッド表示用のレイアウトを設定
+---@return nil
+function M.setup_thread_layout()
+  -- 分割レイアウトを設定
+  M.setup_split_layout()
+  
+  -- スレッド用のウィンドウが存在しない場合は作成
+  if not M.layout.thread_win or not vim.api.nvim_win_is_valid(M.layout.thread_win) then
+    -- メッセージウィンドウにフォーカス
+    vim.api.nvim_set_current_win(M.layout.messages_win)
+    -- 水平分割
+    vim.cmd('split')
+    -- 下側のウィンドウを取得
+    M.layout.thread_win = vim.api.nvim_get_current_win()
+    -- 高さを設定
+    vim.api.nvim_win_set_height(M.layout.thread_win, vim.o.lines / 3)
+  end
+end
+
+-- バッファを作成または取得
+---@param name string バッファ名
+---@return number バッファ番号
+function M.get_or_create_buffer(name)
+  local bufname = 'neo-slack://' .. name
+  
+  -- 既存のバッファを探す
+  for _, buf in ipairs(vim.api.nvim_list_bufs()) do
+    if vim.api.nvim_buf_get_name(buf) == bufname then
+      return buf
+    end
+  end
+  
+  -- 新しいバッファを作成
+  local bufnr = vim.api.nvim_create_buf(false, true)
+  vim.api.nvim_buf_set_name(bufnr, bufname)
+  
+  return bufnr
+end
+
+-- チャンネル一覧のキーマッピングを設定
+---@param bufnr number バッファ番号
+---@return nil
+function M.setup_channels_keymaps(bufnr)
+  local opts = { noremap = true, silent = true }
+  
+  -- Enter: チャンネルを選択
+  vim.api.nvim_buf_set_keymap(bufnr, 'n', '<CR>', '<cmd>lua require("neo-slack.ui").select_channel()<CR>', opts)
+  
+  -- q: ウィンドウを閉じる
+  vim.api.nvim_buf_set_keymap(bufnr, 'n', 'q', '<cmd>q<CR>', opts)
+  
+  -- r: チャンネル一覧を更新
+  vim.api.nvim_buf_set_keymap(bufnr, 'n', 'r', '<cmd>SlackChannels<CR>', opts)
+end
+
+-- メッセージ一覧のキーマッピングを設定
+---@param bufnr number バッファ番号
+---@return nil
+function M.setup_messages_keymaps(bufnr)
+  local opts = { noremap = true, silent = true }
+  
+  -- Enter: スレッドを開く
+  vim.api.nvim_buf_set_keymap(bufnr, 'n', '<CR>', '<cmd>lua require("neo-slack.ui").open_thread()<CR>', opts)
+  
+  -- r: 返信
+  vim.api.nvim_buf_set_keymap(bufnr, 'n', 'r', '<cmd>lua require("neo-slack.ui").reply_to_message()<CR>', opts)
+  
+  -- e: リアクション追加
+  vim.api.nvim_buf_set_keymap(bufnr, 'n', 'e', '<cmd>lua require("neo-slack.ui").add_reaction_to_message()<CR>', opts)
+  
+  -- u: ファイルアップロード
+  vim.api.nvim_buf_set_keymap(bufnr, 'n', 'u', '<cmd>lua require("neo-slack.ui").upload_file_to_channel()<CR>', opts)
+  
+  -- m: 新しいメッセージを送信
+  vim.api.nvim_buf_set_keymap(bufnr, 'n', 'm', '<cmd>lua require("neo-slack.ui").send_new_message()<CR>', opts)
+  
+  -- R: メッセージ一覧を更新
+  vim.api.nvim_buf_set_keymap(bufnr, 'n', 'R', '<cmd>lua require("neo-slack.ui").refresh_messages()<CR>', opts)
+  
+  -- q: ウィンドウを閉じる
+  vim.api.nvim_buf_set_keymap(bufnr, 'n', 'q', '<cmd>q<CR>', opts)
+end
+
+-- スレッド一覧のキーマッピングを設定
+---@param bufnr number バッファ番号
+---@return nil
+function M.setup_thread_keymaps(bufnr)
+  local opts = { noremap = true, silent = true }
+  
+  -- r: スレッドに返信
+  vim.api.nvim_buf_set_keymap(bufnr, 'n', 'r', '<cmd>lua require("neo-slack.ui").reply_to_thread()<CR>', opts)
+  
+  -- e: リアクション追加
+  vim.api.nvim_buf_set_keymap(bufnr, 'n', 'e', '<cmd>lua require("neo-slack.ui").add_reaction_to_thread_message()<CR>', opts)
+  
+  -- R: スレッド一覧を更新
+  vim.api.nvim_buf_set_keymap(bufnr, 'n', 'R', '<cmd>lua require("neo-slack.ui").refresh_thread()<CR>', opts)
+  
+  -- q: スレッドを閉じる
+  vim.api.nvim_buf_set_keymap(bufnr, 'n', 'q', '<cmd>lua require("neo-slack.ui").close_thread()<CR>', opts)
+end
+
 --------------------------------------------------
 -- チャンネル表示関連の関数
 --------------------------------------------------
@@ -357,7 +525,11 @@ function M.select_channel()
     state.set_current_channel(channel_id, channel_name)
     
     -- チャンネルのメッセージを表示（右側のウィンドウに）
-    require('neo-slack').select_channel(channel_id, channel_name)
+    -- 循環参照を避けるため、package.loadedを使用
+    local neo_slack = package.loaded['neo-slack']
+    if neo_slack then
+      neo_slack.select_channel(channel_id, channel_name)
+    end
     
     -- メッセージ一覧のウィンドウにフォーカス
     vim.api.nvim_set_current_win(M.layout.messages_win)
@@ -369,9 +541,13 @@ function M.select_channel()
       notify('チャンネルを選択できませんでした', vim.log.levels.ERROR)
       return
     end
-    
     -- チャンネルのメッセージを表示
-    require('neo-slack').list_messages(channel_name)
+    -- 循環参照を避けるため、package.loadedを使用
+    local neo_slack = package.loaded['neo-slack']
+    if neo_slack then
+      neo_slack.list_messages(channel_name)
+    end
+    
     
     -- メッセージ一覧のウィンドウにフォーカス
     vim.api.nvim_set_current_win(M.layout.messages_win)
@@ -395,7 +571,11 @@ function M.open_thread()
       for _, message in ipairs(messages) do
         if message.ts == message_ts and message.thread_ts and message.reply_count and message.reply_count > 0 then
           -- スレッド返信を表示
-          require('neo-slack').list_thread_replies(message_ts)
+          -- 循環参照を避けるため、package.loadedを使用
+          local neo_slack = package.loaded['neo-slack']
+          if neo_slack then
+            neo_slack.list_thread_replies(message_ts)
+          end
           return
         end
       end
@@ -411,7 +591,11 @@ function M.open_thread()
     local ok, ts = pcall(vim.api.nvim_buf_get_var, vim.api.nvim_get_current_buf(), 'message_' .. i)
     if ok then
       -- スレッド返信を表示
-      require('neo-slack').list_thread_replies(ts)
+      -- 循環参照を避けるため、package.loadedを使用
+      local neo_slack = package.loaded['neo-slack']
+      if neo_slack then
+        neo_slack.list_thread_replies(ts)
+      end
       return
     end
   end
@@ -451,7 +635,11 @@ function M.reply_to_message()
   -- 返信入力を促す
   vim.ui.input({ prompt = '返信: ' }, function(input)
     if input and input ~= '' then
-      require('neo-slack').reply_message(message_ts, input)
+      -- 循環参照を避けるため、package.loadedを使用
+      local neo_slack = package.loaded['neo-slack']
+      if neo_slack then
+        neo_slack.reply_message(message_ts, input)
+      end
     end
   end)
 end
@@ -475,7 +663,11 @@ function M.reply_to_thread()
   -- 返信入力を促す
   vim.ui.input({ prompt = 'スレッド返信: ' }, function(input)
     if input and input ~= '' then
-      require('neo-slack').reply_to_thread(reply_ts, input)
+      -- 循環参照を避けるため、package.loadedを使用
+      local neo_slack = package.loaded['neo-slack']
+      if neo_slack then
+        neo_slack.reply_to_thread(reply_ts, input)
+      end
     end
   end)
 end
@@ -493,7 +685,11 @@ function M.add_reaction_to_message()
   -- リアクション入力を促す
   vim.ui.input({ prompt = 'リアクション (例: thumbsup): ' }, function(input)
     if input and input ~= '' then
-      require('neo-slack').add_reaction(message_ts, input)
+      -- 循環参照を避けるため、package.loadedを使用
+      local neo_slack = package.loaded['neo-slack']
+      if neo_slack then
+        neo_slack.add_reaction(message_ts, input)
+      end
     end
   end)
 end
@@ -511,7 +707,11 @@ function M.add_reaction_to_thread_message()
   -- リアクション入力を促す
   vim.ui.input({ prompt = 'リアクション (例: thumbsup): ' }, function(input)
     if input and input ~= '' then
-      require('neo-slack').add_reaction(message_ts, input)
+      -- 循環参照を避けるため、package.loadedを使用
+      local neo_slack = package.loaded['neo-slack']
+      if neo_slack then
+        neo_slack.add_reaction(message_ts, input)
+      end
     end
   end)
 end
@@ -529,7 +729,11 @@ function M.upload_file_to_channel()
   -- ファイルパス入力を促す
   vim.ui.input({ prompt = 'アップロードするファイルパス: ' }, function(input)
     if input and input ~= '' then
-      require('neo-slack').upload_file(channel_id, input)
+      -- 循環参照を避けるため、package.loadedを使用
+      local neo_slack = package.loaded['neo-slack']
+      if neo_slack then
+        neo_slack.upload_file(channel_id, input)
+      end
     end
   end)
 end
@@ -544,7 +748,11 @@ function M.refresh_messages()
     return
   end
   
-  require('neo-slack').list_messages(channel_id)
+  -- 循環参照を避けるため、package.loadedを使用
+  local neo_slack = package.loaded['neo-slack']
+  if neo_slack then
+    neo_slack.list_messages(channel_id)
+  end
 end
 
 --- スレッド一覧を更新
@@ -557,7 +765,11 @@ function M.refresh_thread()
     return
   end
   
-  require('neo-slack').list_thread_replies(thread_ts)
+  -- 循環参照を避けるため、package.loadedを使用
+  local neo_slack = package.loaded['neo-slack']
+  if neo_slack then
+    neo_slack.list_thread_replies(thread_ts)
+  end
 end
 
 --- 新しいメッセージを送信
@@ -573,7 +785,11 @@ function M.send_new_message()
   -- メッセージ入力を促す
   vim.ui.input({ prompt = 'メッセージ: ' }, function(input)
     if input and input ~= '' then
-      require('neo-slack').send_message(channel_id, input)
+      -- 循環参照を避けるため、package.loadedを使用
+      local neo_slack = package.loaded['neo-slack']
+      if neo_slack then
+        neo_slack.send_message(channel_id, input)
+      end
     end
   end)
 end

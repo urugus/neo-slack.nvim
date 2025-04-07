@@ -32,15 +32,9 @@ if !exists('g:neo_slack_disable_default_mappings') || !g:neo_slack_disable_defau
   nnoremap <silent> <leader>sm :SlackMessages<CR>
 endif
 " プラグインの初期化
-" 自動初期化を無効にする場合は以下の変数を設定
-if !exists('g:neo_slack_disable_auto_setup') || !g:neo_slack_disable_auto_setup
-  " プラグインロード後に安全に初期化
-  augroup neo_slack_setup
-    autocmd!
-    autocmd VimEnter * lua require('neo-slack').setup()
-  augroup END
-endif
+" 自動初期化はデフォルトで無効化（循環参照エラーを避けるため）
+" ユーザーは明示的に :SlackSetup コマンドを実行する必要があります
 
 " 手動初期化用コマンド
 command! -nargs=0 SlackSetup lua require('neo-slack').setup()
-lua require('neo-slack').setup()
+" 自動初期化は VimEnter イベントで行うため、ここでは実行しない
