@@ -13,6 +13,8 @@ M.storage_dir = vim.fn.stdpath('data') .. '/neo-slack'
 M.token_file = M.storage_dir .. '/token'
 M.starred_channels_file = M.storage_dir .. '/starred_channels'
 M.section_collapsed_file = M.storage_dir .. '/section_collapsed'
+M.custom_sections_file = M.storage_dir .. '/custom_sections'
+M.channel_section_map_file = M.storage_dir .. '/channel_section_map'
 
 -- ストレージディレクトリを初期化
 ---@return boolean 初期化に成功したかどうか
@@ -189,6 +191,106 @@ function M.load_section_collapsed()
   file:close()
   
   return section_collapsed
+end
+
+-- カスタムセクションを保存
+---@param custom_sections table カスタムセクションのテーブル
+---@return boolean 保存に成功したかどうか
+function M.save_custom_sections(custom_sections)
+  if not M.init() then
+    return false
+  end
+  
+  local file = io.open(M.custom_sections_file, 'w')
+  if not file then
+    utils.notify('カスタムセクションの保存に失敗しました', vim.log.levels.ERROR)
+    return false
+  end
+  
+  -- JSONに変換して保存
+  local json_str = vim.fn.json_encode(custom_sections)
+  file:write(json_str)
+  file:close()
+  
+  return true
+end
+
+-- カスタムセクションを読み込み
+---@return table カスタムセクションのテーブル
+function M.load_custom_sections()
+  local custom_sections = {}
+  
+  if vim.fn.filereadable(M.custom_sections_file) == 0 then
+    return custom_sections
+  end
+  
+  local file = io.open(M.custom_sections_file, 'r')
+  if not file then
+    utils.notify('カスタムセクションファイルの読み込みに失敗しました', vim.log.levels.ERROR)
+    return custom_sections
+  end
+  
+  local content = file:read('*all')
+  file:close()
+  
+  if content and content ~= '' then
+    local ok, decoded = pcall(vim.fn.json_decode, content)
+    if ok and decoded then
+      custom_sections = decoded
+    end
+  end
+  
+  return custom_sections
+end
+
+-- チャンネルとセクションの関連付けを保存
+---@param channel_section_map table チャンネルとセクションの関連付けテーブル
+---@return boolean 保存に成功したかどうか
+function M.save_channel_section_map(channel_section_map)
+  if not M.init() then
+    return false
+  end
+  
+  local file = io.open(M.channel_section_map_file, 'w')
+  if not file then
+    utils.notify('チャンネルとセクションの関連付けの保存に失敗しました', vim.log.levels.ERROR)
+    return false
+  end
+  
+  -- JSONに変換して保存
+  local json_str = vim.fn.json_encode(channel_section_map)
+  file:write(json_str)
+  file:close()
+  
+  return true
+end
+
+-- チャンネルとセクションの関連付けを読み込み
+---@return table チャンネルとセクションの関連付けテーブル
+function M.load_channel_section_map()
+  local channel_section_map = {}
+  
+  if vim.fn.filereadable(M.channel_section_map_file) == 0 then
+    return channel_section_map
+  end
+  
+  local file = io.open(M.channel_section_map_file, 'r')
+  if not file then
+    utils.notify('チャンネルとセクションの関連付けファイルの読み込みに失敗しました', vim.log.levels.ERROR)
+    return channel_section_map
+  end
+  
+  local content = file:read('*all')
+  file:close()
+  
+  if content and content ~= '' then
+    local ok, decoded = pcall(vim.fn.json_decode, content)
+    if ok and decoded then
+      channel_section_map = decoded
+    end
+  end
+  
+  return channel_section_map
 end
 
 return M
