@@ -266,7 +266,6 @@ function M.assign_channel_dialog(channel_id)
     end
   end)
 end
-end
 
 -- 現在の行のチャンネルをセクションに割り当て
 function M.assign_channel_to_section_current()
