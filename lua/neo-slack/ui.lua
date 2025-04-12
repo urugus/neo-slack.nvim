@@ -719,7 +719,7 @@ function M.show_thread_replies(thread_ts, replies, parent_message)
   M.layout.thread_buf = bufnr
   
   -- バッファを設定
-  setup_buffer_options(bufnr, 'neo-slack-thread')
+  setup_buffer_options(bufnr, 'neo-slack-messages')
   
   -- スレッド一覧を整形
   local lines = {
