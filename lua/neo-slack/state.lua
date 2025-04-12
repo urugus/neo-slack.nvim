@@ -22,6 +22,7 @@ M.current_thread_message = nil
 M.channels = {}
 M.messages = {}
 M.thread_messages = {}
+M.starred_channels = {} -- スター付きチャンネルのIDを保存するテーブル
 M.initialized = false
 
 -- 現在のチャンネルを設定
@@ -147,6 +148,42 @@ function M.is_initialized()
   return M.initialized
 end
 
+-- スター付きチャンネルを設定
+---@param channel_id string チャンネルID
+---@param is_starred boolean スター付きかどうか
+function M.set_channel_starred(channel_id, is_starred)
+  if is_starred then
+    -- スター付きに追加
+    M.starred_channels[channel_id] = true
+  else
+    -- スター付きから削除
+    M.starred_channels[channel_id] = nil
+  end
+end
+
+-- チャンネルがスター付きかどうかを確認
+---@param channel_id string チャンネルID
+---@return boolean スター付きかどうか
+function M.is_channel_starred(channel_id)
+  return M.starred_channels[channel_id] == true
+end
+
+-- スター付きチャンネルのIDリストを取得
+---@return table スター付きチャンネルのIDリスト
+function M.get_starred_channel_ids()
+  local ids = {}
+  for id, _ in pairs(M.starred_channels) do
+    table.insert(ids, id)
+  end
+  return ids
+end
+
+-- スター付きチャンネルを設定
+---@param starred_channels table スター付きチャンネルのIDテーブル
+function M.set_starred_channels(starred_channels)
+  M.starred_channels = starred_channels or {}
+end
+
 -- 状態をリセット
 function M.reset()
   M.current_channel_id = nil
@@ -156,6 +193,7 @@ function M.reset()
   M.channels = {}
   M.messages = {}
   M.thread_messages = {}
+  M.starred_channels = {}
   M.initialized = false
 end
 
