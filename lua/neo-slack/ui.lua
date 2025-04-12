@@ -158,7 +158,7 @@ function M.create_section_dialog()
     if input and input ~= '' then
       local section_id = state.add_section(input)
       -- セクション情報を保存
-      storage.save_custom_sections(state.custom_sections)
+      state.save_custom_sections()
       -- チャンネル一覧を更新
       local neo_slack = package.loaded['neo-slack']
       if neo_slack then
@@ -182,7 +182,7 @@ function M.edit_section_dialog(section_id)
     if input and input ~= '' then
       section.name = input
       -- セクション情報を保存
-      storage.save_custom_sections(state.custom_sections)
+      state.save_custom_sections()
       -- チャンネル一覧を更新
       local neo_slack = package.loaded['neo-slack']
       if neo_slack then
@@ -205,8 +205,8 @@ function M.delete_section_dialog(section_id)
     if input and (input:lower() == 'y' or input:lower() == 'yes') then
       state.remove_section(section_id)
       -- セクション情報を保存
-      storage.save_custom_sections(state.custom_sections)
-      storage.save_channel_section_map(state.channel_section_map)
+      state.save_custom_sections()
+      state.save_channel_section_map()
       -- チャンネル一覧を更新
       local neo_slack = package.loaded['neo-slack']
       if neo_slack then
@@ -254,7 +254,7 @@ function M.assign_channel_dialog(channel_id)
       local section = sections[idx]
       state.assign_channel_to_section(channel_id, section.id)
       -- セクション情報を保存
-      storage.save_channel_section_map(state.channel_section_map)
+      state.save_channel_section_map()
       -- チャンネル一覧を更新
       local neo_slack = package.loaded['neo-slack']
       if neo_slack then
@@ -1185,9 +1185,8 @@ function M.toggle_star_channel()
     -- スター付き状態を切り替え
     local is_starred = state.is_channel_starred(channel_id)
     state.set_channel_starred(channel_id, not is_starred)
-    
     -- スター付きチャンネルを保存
-    local storage = require('neo-slack.storage')
+    state.save_starred_channels()
     storage.save_starred_channels(state.starred_channels)
     
     -- 通知

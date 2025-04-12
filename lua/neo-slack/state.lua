@@ -12,9 +12,18 @@
 ---@field messages table チャンネルIDをキーとするメッセージのキャッシュ
 ---@field thread_messages table スレッドタイムスタンプをキーとするスレッドメッセージのキャッシュ
 ---@field initialized boolean プラグインが初期化されたかどうか
-local storage = require('neo-slack.storage')
+-- 循環参照を避けるため、storageモジュールは遅延読み込みする
+local storage
 
 local M = {}
+
+-- storageモジュールを取得する関数
+local function get_storage()
+  if not storage then
+    storage = require('neo-slack.storage')
+  end
+  return storage
+end
 
 -- 状態の初期化
 M.current_channel_id = nil
@@ -207,7 +216,7 @@ end
 -- セクションの折りたたみ状態を初期化
 function M.init_section_collapsed()
   -- 保存された折りたたみ状態を読み込み
-  local saved_collapsed = storage.load_section_collapsed()
+  local saved_collapsed = get_storage().load_section_collapsed()
   
   -- デフォルトでは「スター付き」セクションは展開、「チャンネル」セクションは展開
   M.section_collapsed = {
@@ -218,7 +227,22 @@ end
 
 -- セクションの折りたたみ状態を保存
 function M.save_section_collapsed()
-  storage.save_section_collapsed(M.section_collapsed)
+  get_storage().save_section_collapsed(M.section_collapsed)
+end
+
+-- スター付きチャンネルを保存
+function M.save_starred_channels()
+  get_storage().save_starred_channels(M.starred_channels)
+end
+
+-- カスタムセクションを保存
+function M.save_custom_sections()
+  get_storage().save_custom_sections(M.custom_sections)
+end
+
+-- チャンネルとセクションの関連付けを保存
+function M.save_channel_section_map()
+  get_storage().save_channel_section_map(M.channel_section_map)
 end
 
 -- セクションを追加
@@ -264,6 +288,16 @@ end
 ---@return string|nil セクションID
 function M.get_channel_section(channel_id)
   return M.channel_section_map[channel_id]
+end
+
+-- カスタムセクションを保存
+function M.save_custom_sections()
+  get_storage().save_custom_sections(M.custom_sections)
+end
+
+-- チャンネルとセクションの関連付けを保存
+function M.save_channel_section_map()
+  get_storage().save_channel_section_map(M.channel_section_map)
 end
 
 -- セクションに属するチャンネルを取得
