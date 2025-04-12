@@ -230,6 +230,21 @@ function M.save_section_collapsed()
   get_storage().save_section_collapsed(M.section_collapsed)
 end
 
+-- スター付きチャンネルを保存
+function M.save_starred_channels()
+  get_storage().save_starred_channels(M.starred_channels)
+end
+
+-- カスタムセクションを保存
+function M.save_custom_sections()
+  get_storage().save_custom_sections(M.custom_sections)
+end
+
+-- チャンネルとセクションの関連付けを保存
+function M.save_channel_section_map()
+  get_storage().save_channel_section_map(M.channel_section_map)
+end
+
 -- セクションを追加
 ---@param name string セクション名
 ---@return string セクションID

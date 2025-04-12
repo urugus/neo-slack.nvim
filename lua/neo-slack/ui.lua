@@ -1185,9 +1185,8 @@ function M.toggle_star_channel()
     -- スター付き状態を切り替え
     local is_starred = state.is_channel_starred(channel_id)
     state.set_channel_starred(channel_id, not is_starred)
-    
     -- スター付きチャンネルを保存
-    local storage = require('neo-slack.storage')
+    state.save_starred_channels()
     storage.save_starred_channels(state.starred_channels)
     
     -- 通知
