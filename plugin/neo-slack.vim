@@ -1,11 +1,11 @@
-" neo-slack.vim - Neovim用Slackプラグイン
-" Maintainer: Neo-Slack開発者
+" neo-slack.nvim - Neovim用Slackプラグイン
+" Maintainer: Neo-Slack.nvim開発者
 " Version: 0.1.0
 
-if exists('g:loaded_neo_slack') || &cp || v:version < 700
+if exists('g:loaded_neo_slack_nvim') || &cp || v:version < 700
   finish
 endif
-let g:loaded_neo_slack = 1
+let g:loaded_neo_slack_nvim = 1
 
 " コマンド定義
 command! -nargs=0 SlackStatus lua require('neo-slack').status()

@@ -1,5 +1,5 @@
 ---@brief [[
---- neo-slack UI モジュール
+--- neo-slack.nvim UI モジュール
 --- ユーザーインターフェースを構築します
 ---@brief ]]
 

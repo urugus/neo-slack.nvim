@@ -1,5 +1,5 @@
 ---@brief [[
---- neo-slack API モジュール
+--- neo-slack.nvim API モジュール
 --- Slack APIとの通信を処理します
 ---@brief ]]
 

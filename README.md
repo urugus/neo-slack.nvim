@@ -1,4 +1,4 @@
-# Neo-Slack
+# Neo-Slack.nvim
 
 Neovimから直接Slackを操作できるプラグインです。このプラグインを使用することで、Neovimのエディタ環境を離れることなくSlackでのコミュニケーションが可能になります。
 
@@ -29,14 +29,14 @@ Neovimから直接Slackを操作できるプラグインです。このプラグ
 
 ```vim
 Plug 'nvim-lua/plenary.nvim'
-Plug 'username/neo-slack'
+Plug 'username/neo-slack.nvim'
 ```
 
 ### packer.nvimを使用する場合
 
 ```lua
 use {
-  'username/neo-slack',
+  'username/neo-slack.nvim',
   requires = { 'nvim-lua/plenary.nvim' }
 }
 ```
@@ -45,7 +45,7 @@ use {
 
 ```lua
 {
-  'username/neo-slack',
+  'username/neo-slack.nvim',
   dependencies = { 'nvim-lua/plenary.nvim' },
   config = function()
     -- オプション: 明示的に初期化

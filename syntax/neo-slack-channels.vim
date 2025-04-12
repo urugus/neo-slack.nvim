@@ -1,7 +1,7 @@
 " Vim syntax file
-" Language: Neo-Slack Channels
-" Maintainer: Neo-Slack Developer
-" Latest Revision: 2025-04-06
+" Language: Neo-Slack.nvim Channels
+" Maintainer: Neo-Slack.nvim Developer
+" Latest Revision: 2025-04-13
 
 if exists("b:current_syntax")
   finish
@@ -23,4 +23,4 @@ highlight default link neoSlackChannelPrivate Special
 highlight default link neoSlackChannelJoined Statement
 highlight default link neoSlackChannelUnread Number
 
-let b:current_syntax = "neo-slack-channels"
+let b:current_syntax = "neo-slack-nvim-channels"
