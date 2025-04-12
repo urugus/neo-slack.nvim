@@ -12,6 +12,8 @@
 ---@field messages table チャンネルIDをキーとするメッセージのキャッシュ
 ---@field thread_messages table スレッドタイムスタンプをキーとするスレッドメッセージのキャッシュ
 ---@field initialized boolean プラグインが初期化されたかどうか
+local storage = require('neo-slack.storage')
+
 local M = {}
 
 -- 状態の初期化
@@ -23,6 +25,7 @@ M.channels = {}
 M.messages = {}
 M.thread_messages = {}
 M.starred_channels = {} -- スター付きチャンネルのIDを保存するテーブル
+M.section_collapsed = {} -- セクションの折りたたみ状態を保存するテーブル
 M.initialized = false
 
 -- 現在のチャンネルを設定
@@ -184,6 +187,38 @@ function M.set_starred_channels(starred_channels)
   M.starred_channels = starred_channels or {}
 end
 
+-- セクションの折りたたみ状態を設定
+---@param section_name string セクション名
+---@param is_collapsed boolean 折りたたみ状態
+function M.set_section_collapsed(section_name, is_collapsed)
+  M.section_collapsed[section_name] = is_collapsed
+end
+
+-- セクションの折りたたみ状態を取得
+---@param section_name string セクション名
+---@return boolean 折りたたみ状態
+function M.is_section_collapsed(section_name)
+  -- デフォルトでは展開状態（falseを返す）
+  return M.section_collapsed[section_name] == true
+end
+
+-- セクションの折りたたみ状態を初期化
+function M.init_section_collapsed()
+  -- 保存された折りたたみ状態を読み込み
+  local saved_collapsed = storage.load_section_collapsed()
+  
+  -- デフォルトでは「スター付き」セクションは展開、「チャンネル」セクションは展開
+  M.section_collapsed = {
+    starred = saved_collapsed.starred or false,  -- スター付きセクション
+    channels = saved_collapsed.channels or false  -- チャンネルセクション
+  }
+end
+
+-- セクションの折りたたみ状態を保存
+function M.save_section_collapsed()
+  storage.save_section_collapsed(M.section_collapsed)
+end
+
 -- 状態をリセット
 function M.reset()
   M.current_channel_id = nil
@@ -194,6 +229,7 @@ function M.reset()
   M.messages = {}
   M.thread_messages = {}
   M.starred_channels = {}
+  M.section_collapsed = {}
   M.initialized = false
 end
 
