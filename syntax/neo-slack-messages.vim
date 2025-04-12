@@ -1,7 +1,7 @@
 " Vim syntax file
-" Language: Neo-Slack Messages
-" Maintainer: Neo-Slack Developer
-" Latest Revision: 2025-04-06
+" Language: Neo-Slack.nvim Messages
+" Maintainer: Neo-Slack.nvim Developer
+" Latest Revision: 2025-04-13
 
 if exists("b:current_syntax")
   finish
@@ -65,4 +65,4 @@ highlight default link neoSlackBold Bold
 highlight default link neoSlackItalic Italic
 highlight default link neoSlackStrike Comment
 
-let b:current_syntax = "neo-slack-messages"
+let b:current_syntax = "neo-slack-nvim-messages"

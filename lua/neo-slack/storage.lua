@@ -1,5 +1,5 @@
 ---@brief [[
---- neo-slack ストレージモジュール
+--- neo-slack.nvim ストレージモジュール
 --- トークンなどの設定をローカルに保存・読み込みします
 ---@brief ]]
 
@@ -9,7 +9,7 @@ local utils = require('neo-slack.utils')
 local M = {}
 
 -- データ保存先のパス
-M.storage_dir = vim.fn.stdpath('data') .. '/neo-slack'
+M.storage_dir = vim.fn.stdpath('data') .. '/neo-slack.nvim'
 M.token_file = M.storage_dir .. '/token'
 M.starred_channels_file = M.storage_dir .. '/starred_channels'
 M.section_collapsed_file = M.storage_dir .. '/section_collapsed'

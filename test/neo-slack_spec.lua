@@ -1,9 +1,9 @@
--- neo-slack プラグインのテスト
+-- neo-slack.nvim プラグインのテスト
 
 local assert = require('luassert')
 local mock = require('luassert.mock')
 
-describe('neo-slack', function()
+describe('neo-slack.nvim', function()
   local neo_slack
   local api_mock
   local ui_mock
