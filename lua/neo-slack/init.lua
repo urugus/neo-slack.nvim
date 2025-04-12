@@ -103,6 +103,14 @@ function M.setup(opts)
   local starred_channels = storage.load_starred_channels()
   state.set_starred_channels(starred_channels)
   
+  -- カスタムセクションの情報を読み込み
+  local custom_sections = storage.load_custom_sections()
+  state.custom_sections = custom_sections
+  
+  -- チャンネルとセクションの関連付けを読み込み
+  local channel_section_map = storage.load_channel_section_map()
+  state.channel_section_map = channel_section_map
+  
   -- セクションの折りたたみ状態を初期化
   state.init_section_collapsed()
   

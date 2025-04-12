@@ -26,6 +26,8 @@ M.messages = {}
 M.thread_messages = {}
 M.starred_channels = {} -- スター付きチャンネルのIDを保存するテーブル
 M.section_collapsed = {} -- セクションの折りたたみ状態を保存するテーブル
+M.custom_sections = {} -- カスタムセクションのリスト
+M.channel_section_map = {} -- チャンネルとセクションの関連付け
 M.initialized = false
 
 -- 現在のチャンネルを設定
@@ -219,6 +221,64 @@ function M.save_section_collapsed()
   storage.save_section_collapsed(M.section_collapsed)
 end
 
+-- セクションを追加
+---@param name string セクション名
+---@return string セクションID
+function M.add_section(name)
+  local id = os.time() .. '_' .. math.random(1000, 9999) -- ユニークIDを生成
+  M.custom_sections[id] = {
+    id = id,
+    name = name,
+    order = table.maxn(M.custom_sections) + 1,
+    is_collapsed = false
+  }
+  return id
+end
+
+-- セクションを削除
+---@param section_id string セクションID
+function M.remove_section(section_id)
+  -- セクションに属するチャンネルの関連付けを解除
+  for channel_id, sec_id in pairs(M.channel_section_map) do
+    if sec_id == section_id then
+      M.channel_section_map[channel_id] = nil
+    end
+  end
+  -- セクションを削除
+  M.custom_sections[section_id] = nil
+end
+
+-- チャンネルをセクションに割り当て
+---@param channel_id string チャンネルID
+---@param section_id string|nil セクションID (nilの場合は割り当て解除)
+function M.assign_channel_to_section(channel_id, section_id)
+  if section_id and M.custom_sections[section_id] then
+    M.channel_section_map[channel_id] = section_id
+  else
+    M.channel_section_map[channel_id] = nil
+  end
+end
+
+-- チャンネルが属するセクションを取得
+---@param channel_id string チャンネルID
+---@return string|nil セクションID
+function M.get_channel_section(channel_id)
+  return M.channel_section_map[channel_id]
+end
+
+-- セクションに属するチャンネルを取得
+---@param section_id string セクションID
+---@return table チャンネルIDのリスト
+function M.get_section_channels(section_id)
+  local channels = {}
+  for channel_id, sec_id in pairs(M.channel_section_map) do
+    if sec_id == section_id then
+      table.insert(channels, channel_id)
+    end
+  end
+  return channels
+end
+
 -- 状態をリセット
 function M.reset()
   M.current_channel_id = nil
@@ -230,6 +290,8 @@ function M.reset()
   M.thread_messages = {}
   M.starred_channels = {}
   M.section_collapsed = {}
+  M.custom_sections = {}
+  M.channel_section_map = {}
   M.initialized = false
 end
 
