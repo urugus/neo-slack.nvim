@@ -99,10 +99,12 @@ function M.setup(opts)
   if M.config.notification then
     notification.setup(M.config.refresh_interval)
   end
-  
   -- スター付きチャンネルの情報を読み込み
   local starred_channels = storage.load_starred_channels()
   state.set_starred_channels(starred_channels)
+  
+  -- セクションの折りたたみ状態を初期化
+  state.init_section_collapsed()
   
   -- 状態を初期化済みに設定
   state.set_initialized(true)

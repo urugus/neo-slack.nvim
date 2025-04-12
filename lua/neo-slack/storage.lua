@@ -12,6 +12,7 @@ local M = {}
 M.storage_dir = vim.fn.stdpath('data') .. '/neo-slack'
 M.token_file = M.storage_dir .. '/token'
 M.starred_channels_file = M.storage_dir .. '/starred_channels'
+M.section_collapsed_file = M.storage_dir .. '/section_collapsed'
 
 -- ストレージディレクトリを初期化
 ---@return boolean 初期化に成功したかどうか
@@ -137,6 +138,57 @@ function M.load_starred_channels()
   file:close()
   
   return starred_channels
+end
+
+-- セクションの折りたたみ状態を保存
+---@param section_collapsed table セクションの折りたたみ状態テーブル
+---@return boolean 保存に成功したかどうか
+function M.save_section_collapsed(section_collapsed)
+  if not M.init() then
+    return false
+  end
+  
+  local file = io.open(M.section_collapsed_file, 'w')
+  if not file then
+    utils.notify('セクションの折りたたみ状態の保存に失敗しました', vim.log.levels.ERROR)
+    return false
+  end
+  
+  -- セクション名と折りたたみ状態を1行ずつ保存
+  for section_name, is_collapsed in pairs(section_collapsed) do
+    if is_collapsed then
+      file:write(section_name .. '\n')
+    end
+  end
+  file:close()
+  
+  return true
+end
+
+-- セクションの折りたたみ状態を読み込み
+---@return table セクションの折りたたみ状態テーブル
+function M.load_section_collapsed()
+  local section_collapsed = {}
+  
+  if vim.fn.filereadable(M.section_collapsed_file) == 0 then
+    return section_collapsed
+  end
+  
+  local file = io.open(M.section_collapsed_file, 'r')
+  if not file then
+    utils.notify('セクションの折りたたみ状態ファイルの読み込みに失敗しました', vim.log.levels.ERROR)
+    return section_collapsed
+  end
+  
+  -- 1行ずつ読み込み
+  for line in file:lines() do
+    if line and line ~= '' then
+      section_collapsed[line] = true
+    end
+  end
+  file:close()
+  
+  return section_collapsed
 end
 
 return M

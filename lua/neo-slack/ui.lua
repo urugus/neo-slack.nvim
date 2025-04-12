@@ -121,14 +121,39 @@ function M.get_or_create_buffer(name)
   return bufnr
 end
 
+-- セクションの折りたたみ/展開を切り替える
+---@param section_name string セクション名
+---@return nil
+function M.toggle_section_collapse(section_name)
+  local is_collapsed = state.is_section_collapsed(section_name)
+  state.set_section_collapsed(section_name, not is_collapsed)
+  
+  -- 折りたたみ状態を保存
+  state.save_section_collapsed()
+  
+  -- チャンネル一覧を更新
+  -- 循環参照を避けるため、package.loadedを使用
+  local neo_slack = package.loaded['neo-slack']
+  if neo_slack then
+    neo_slack.list_channels()
+  end
+  
+  -- 通知
+  if not is_collapsed then
+    notify(section_name .. ' セクションを折りたたみました', vim.log.levels.INFO)
+  else
+    notify(section_name .. ' セクションを展開しました', vim.log.levels.INFO)
+  end
+end
+
 -- チャンネル一覧のキーマッピングを設定
 ---@param bufnr number バッファ番号
 ---@return nil
 function M.setup_channels_keymaps(bufnr)
   local opts = { noremap = true, silent = true }
   
-  -- Enter: チャンネルを選択
-  vim.api.nvim_buf_set_keymap(bufnr, 'n', '<CR>', '<cmd>lua require("neo-slack.ui").select_channel()<CR>', opts)
+  -- Enter: チャンネルを選択またはセクションの折りたたみ/展開
+  vim.api.nvim_buf_set_keymap(bufnr, 'n', '<CR>', '<cmd>lua require("neo-slack.ui").select_channel_or_toggle_section()<CR>', opts)
   
   -- q: ウィンドウを閉じる
   vim.api.nvim_buf_set_keymap(bufnr, 'n', 'q', '<cmd>q<CR>', opts)
@@ -205,6 +230,11 @@ function M.show_channels(channels)
   -- バッファを設定
   setup_buffer_options(bufnr, 'neo-slack-channels')
   
+  -- セクションの折りたたみ状態を初期化（初回のみ）
+  if not state.section_collapsed or not next(state.section_collapsed) then
+    state.init_section_collapsed()
+  end
+  
   -- チャンネル一覧を整形
   local lines = {
     '# Slackチャンネル一覧',
@@ -233,9 +263,37 @@ function M.show_channels(channels)
   
   -- スター付きチャンネルセクション
   if #starred_channels > 0 then
-    table.insert(lines, '## ★ スター付き')
+    -- 折りたたみ状態を表示
+    local collapsed_mark = state.is_section_collapsed('starred') and '▶' or '▼'
+    table.insert(lines, string.format('## %s ★ スター付き', collapsed_mark))
     
-    for _, channel in ipairs(starred_channels) do
+    -- 折りたたまれていない場合のみチャンネルを表示
+    if not state.is_section_collapsed('starred') then
+      for _, channel in ipairs(starred_channels) do
+        local prefix = channel.is_private and '🔒' or '#'
+        local member_status = channel.is_member and '✓' or ' '
+        local unread = channel.unread_count and channel.unread_count > 0
+          and string.format(' (%d)', channel.unread_count) or ''
+        
+        table.insert(lines, string.format('%s %s %s%s', member_status, prefix, channel.name, unread))
+        
+        -- チャンネルIDを保存（後で使用）
+        vim.api.nvim_buf_set_var(bufnr, 'channel_' .. #lines, channel.id)
+      end
+      
+      -- セクション間の区切り
+      table.insert(lines, '')
+    end
+  end
+  
+  -- 通常のチャンネルセクション
+  -- 折りたたみ状態を表示
+  local collapsed_mark = state.is_section_collapsed('channels') and '▶' or '▼'
+  table.insert(lines, string.format('## %s チャンネル', collapsed_mark))
+  
+  -- 折りたたまれていない場合のみチャンネルを表示
+  if not state.is_section_collapsed('channels') then
+    for _, channel in ipairs(normal_channels) do
       local prefix = channel.is_private and '🔒' or '#'
       local member_status = channel.is_member and '✓' or ' '
       local unread = channel.unread_count and channel.unread_count > 0
@@ -246,24 +304,6 @@ function M.show_channels(channels)
       -- チャンネルIDを保存（後で使用）
       vim.api.nvim_buf_set_var(bufnr, 'channel_' .. #lines, channel.id)
     end
-    
-    -- セクション間の区切り
-    table.insert(lines, '')
-  end
-  
-  -- 通常のチャンネルセクション
-  table.insert(lines, '## チャンネル')
-  
-  for _, channel in ipairs(normal_channels) do
-    local prefix = channel.is_private and '🔒' or '#'
-    local member_status = channel.is_member and '✓' or ' '
-    local unread = channel.unread_count and channel.unread_count > 0
-      and string.format(' (%d)', channel.unread_count) or ''
-    
-    table.insert(lines, string.format('%s %s %s%s', member_status, prefix, channel.name, unread))
-    
-    -- チャンネルIDを保存（後で使用）
-    vim.api.nvim_buf_set_var(bufnr, 'channel_' .. #lines, channel.id)
   end
   
   -- バッファにラインを設定
@@ -558,6 +598,26 @@ local function get_message_ts_at_line(line_nr)
   end
   
   return nil
+end
+
+--- チャンネルを選択またはセクションの折りたたみ/展開
+--- @return nil
+function M.select_channel_or_toggle_section()
+  local line = vim.api.nvim_get_current_line()
+  
+  -- セクションヘッダーかどうかを判断（折りたたみマーク付き）
+  if line:match('^## [▶▼] ★ スター付き') then
+    -- スター付きセクションの折りたたみ/展開
+    M.toggle_section_collapse('starred')
+    return
+  elseif line:match('^## [▶▼] チャンネル') then
+    -- チャンネルセクションの折りたたみ/展開
+    M.toggle_section_collapse('channels')
+    return
+  end
+  
+  -- セクションヘッダーでない場合はチャンネルを選択
+  M.select_channel()
 end
 
 --- チャンネルを選択
