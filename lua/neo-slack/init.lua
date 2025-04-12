@@ -92,7 +92,6 @@ function M.setup(opts)
       return false -- プロンプト後に再度setup()が呼ばれるため、ここで終了
     end
   end
-  
   -- APIクライアントの初期化
   api.setup(M.config.token)
   
@@ -101,7 +100,12 @@ function M.setup(opts)
     notification.setup(M.config.refresh_interval)
   end
   
+  -- スター付きチャンネルの情報を読み込み
+  local starred_channels = storage.load_starred_channels()
+  state.set_starred_channels(starred_channels)
+  
   -- 状態を初期化済みに設定
+  state.set_initialized(true)
   state.set_initialized(true)
   
   notify('初期化完了', vim.log.levels.INFO)

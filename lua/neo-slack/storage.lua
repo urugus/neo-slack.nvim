@@ -11,6 +11,7 @@ local M = {}
 -- データ保存先のパス
 M.storage_dir = vim.fn.stdpath('data') .. '/neo-slack'
 M.token_file = M.storage_dir .. '/token'
+M.starred_channels_file = M.storage_dir .. '/starred_channels'
 
 -- ストレージディレクトリを初期化
 ---@return boolean 初期化に成功したかどうか
@@ -87,6 +88,55 @@ function M.delete_token()
     return success
   end
   return false
+end
+
+-- スター付きチャンネルを保存
+---@param starred_channels table スター付きチャンネルのIDテーブル
+---@return boolean 保存に成功したかどうか
+function M.save_starred_channels(starred_channels)
+  if not M.init() then
+    return false
+  end
+  
+  local file = io.open(M.starred_channels_file, 'w')
+  if not file then
+    utils.notify('スター付きチャンネルの保存に失敗しました', vim.log.levels.ERROR)
+    return false
+  end
+  
+  -- チャンネルIDを1行ずつ保存
+  for channel_id, _ in pairs(starred_channels) do
+    file:write(channel_id .. '\n')
+  end
+  file:close()
+  
+  return true
+end
+
+-- スター付きチャンネルを読み込み
+---@return table スター付きチャンネルのIDテーブル
+function M.load_starred_channels()
+  local starred_channels = {}
+  
+  if vim.fn.filereadable(M.starred_channels_file) == 0 then
+    return starred_channels
+  end
+  
+  local file = io.open(M.starred_channels_file, 'r')
+  if not file then
+    utils.notify('スター付きチャンネルファイルの読み込みに失敗しました', vim.log.levels.ERROR)
+    return starred_channels
+  end
+  
+  -- 1行ずつ読み込み
+  for line in file:lines() do
+    if line and line ~= '' then
+      starred_channels[line] = true
+    end
+  end
+  file:close()
+  
+  return starred_channels
 end
 
 return M

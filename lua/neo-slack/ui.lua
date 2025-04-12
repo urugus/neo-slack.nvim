@@ -135,6 +135,9 @@ function M.setup_channels_keymaps(bufnr)
   
   -- r: チャンネル一覧を更新
   vim.api.nvim_buf_set_keymap(bufnr, 'n', 'r', '<cmd>SlackChannels<CR>', opts)
+  
+  -- s: チャンネルをスター付き/解除
+  vim.api.nvim_buf_set_keymap(bufnr, 'n', 's', '<cmd>lua require("neo-slack.ui").toggle_star_channel()<CR>', opts)
 end
 
 -- メッセージ一覧のキーマッピングを設定
@@ -208,13 +211,50 @@ function M.show_channels(channels)
     '',
   }
   
-  -- チャンネルをソート
-  table.sort(channels, function(a, b)
-    return a.name < b.name
-  end)
+  -- スター付きチャンネルとそれ以外に分類
+  local starred_channels = {}
+  local normal_channels = {}
   
-  -- チャンネル情報を追加
   for _, channel in ipairs(channels) do
+    if state.is_channel_starred(channel.id) then
+      table.insert(starred_channels, channel)
+    else
+      table.insert(normal_channels, channel)
+    end
+  end
+  
+  -- チャンネルをソート（それぞれのカテゴリ内でアルファベット順）
+  local sort_func = function(a, b)
+    return a.name < b.name
+  end
+  
+  table.sort(starred_channels, sort_func)
+  table.sort(normal_channels, sort_func)
+  
+  -- スター付きチャンネルセクション
+  if #starred_channels > 0 then
+    table.insert(lines, '## ★ スター付き')
+    
+    for _, channel in ipairs(starred_channels) do
+      local prefix = channel.is_private and '🔒' or '#'
+      local member_status = channel.is_member and '✓' or ' '
+      local unread = channel.unread_count and channel.unread_count > 0
+        and string.format(' (%d)', channel.unread_count) or ''
+      
+      table.insert(lines, string.format('%s %s %s%s', member_status, prefix, channel.name, unread))
+      
+      -- チャンネルIDを保存（後で使用）
+      vim.api.nvim_buf_set_var(bufnr, 'channel_' .. #lines, channel.id)
+    end
+    
+    -- セクション間の区切り
+    table.insert(lines, '')
+  end
+  
+  -- 通常のチャンネルセクション
+  table.insert(lines, '## チャンネル')
+  
+  for _, channel in ipairs(normal_channels) do
     local prefix = channel.is_private and '🔒' or '#'
     local member_status = channel.is_member and '✓' or ' '
     local unread = channel.unread_count and channel.unread_count > 0
@@ -810,6 +850,49 @@ function M.send_new_message()
       end
     end
   end)
+end
+
+--- チャンネルをスター付き/解除
+--- @return nil
+function M.toggle_star_channel()
+  local line = vim.api.nvim_get_current_line()
+  local line_nr = vim.api.nvim_win_get_cursor(0)[1]
+  local bufnr = vim.api.nvim_get_current_buf()
+  
+  -- チャンネルIDを直接取得（行番号から）
+  local ok, channel_id = pcall(vim.api.nvim_buf_get_var, bufnr, 'channel_' .. line_nr)
+  
+  if ok and channel_id then
+    -- チャンネル名を抽出（表示用）
+    local channel_name = line:match('[#🔒]%s+([%w-_]+)')
+    if not channel_name then
+      channel_name = "選択したチャンネル"
+    end
+    
+    -- スター付き状態を切り替え
+    local is_starred = state.is_channel_starred(channel_id)
+    state.set_channel_starred(channel_id, not is_starred)
+    
+    -- スター付きチャンネルを保存
+    local storage = require('neo-slack.storage')
+    storage.save_starred_channels(state.starred_channels)
+    
+    -- 通知
+    if not is_starred then
+      notify(channel_name .. ' をスター付きに追加しました', vim.log.levels.INFO)
+    else
+      notify(channel_name .. ' のスターを解除しました', vim.log.levels.INFO)
+    end
+    
+    -- チャンネル一覧を更新
+    -- 循環参照を避けるため、package.loadedを使用
+    local neo_slack = package.loaded['neo-slack']
+    if neo_slack then
+      neo_slack.list_channels()
+    end
+  else
+    notify('チャンネルを選択できませんでした', vim.log.levels.ERROR)
+  end
 end
 
 return M
