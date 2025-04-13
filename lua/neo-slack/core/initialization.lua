@@ -6,6 +6,7 @@
 local events = require('neo-slack.core.events')
 local utils = require('neo-slack.utils')
 local config = require('neo-slack.core.config')
+local state = require('neo-slack.state')
 
 ---@class NeoSlackInitialization
 ---@field status table 初期化ステータス
