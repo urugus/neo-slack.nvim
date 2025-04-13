@@ -210,6 +210,10 @@ function M.setup_messages_keymaps(bufnr)
   
   -- c: チャンネル一覧に戻る
   vim.api.nvim_buf_set_keymap(bufnr, 'n', 'c', '<cmd>lua require("neo-slack.ui").focus_channels()<CR>', opts)
+  
+  -- t: スレッド返信を表示
+  vim.api.nvim_buf_set_keymap(bufnr, 'n', 't', '<cmd>lua require("neo-slack.ui").open_thread()<CR>', opts)
+end
 end
 
 -- チャンネルを選択またはセクションの折りたたみ/展開
@@ -563,6 +567,224 @@ function M.show_channels(channels)
   
   -- チャンネル一覧のウィンドウにフォーカス
   vim.api.nvim_set_current_win(M.layout.channels_win)
+end
+
+-- スレッド返信を開く
+function M.open_thread()
+  local line_nr = vim.api.nvim_win_get_cursor(0)[1]
+  local bufnr = vim.api.nvim_get_current_buf()
+  
+  -- 現在の行の上にあるメッセージヘッダーを探す
+  local current_message_id = nil
+  for i = line_nr, 1, -1 do
+    local ok, message_id = pcall(vim.api.nvim_buf_get_var, bufnr, 'message_' .. i)
+    if ok and message_id then
+      current_message_id = message_id
+      break
+    end
+  end
+  
+  if not current_message_id then
+    notify('スレッド返信を開くメッセージが見つかりませんでした', vim.log.levels.ERROR)
+    return
+  end
+  
+  -- スレッド返信を取得
+  api.get_thread_replies(state.get_current_channel_id(), current_message_id, function(success, replies)
+    if success and replies then
+      -- スレッド表示用のレイアウトを設定
+      M.setup_thread_layout()
+      
+      -- バッファを作成または取得
+      local thread_bufnr = M.get_or_create_buffer('thread-' .. current_message_id)
+      M.layout.thread_buf = thread_bufnr
+      
+      -- バッファを設定
+      setup_buffer_options(thread_bufnr, 'neo-slack-messages')
+      
+      -- スレッド返信を整形
+      local lines = {
+        '# スレッド返信',
+        '',
+      }
+      
+      -- 返信を古い順に並べ替え
+      table.sort(replies, function(a, b)
+        return a.ts < b.ts
+      end)
+      
+      -- 返信を表示
+      for _, reply in ipairs(replies) do
+        -- ユーザー名を取得
+        local user_name = reply.user or 'Unknown'
+        if type(reply.user) == 'string' then
+          local user = state.get_user_by_id(reply.user)
+          if user then
+            user_name = user.name
+          end
+        end
+        
+        -- タイムスタンプを整形
+        local timestamp = os.date('%Y-%m-%d %H:%M:%S', tonumber(reply.ts:match('^(%d+)')))
+        
+        -- 返信ヘッダー
+        table.insert(lines, string.format('## %s (%s)', user_name, timestamp))
+        
+        -- 返信本文
+        local text = reply.text or ''
+        for line in text:gmatch('[^\n]+') do
+          table.insert(lines, line)
+        end
+        
+        -- リアクション情報
+        if reply.reactions and #reply.reactions > 0 then
+          local reactions = {}
+          for _, reaction in ipairs(reply.reactions) do
+            table.insert(reactions, string.format(':%s: %d', reaction.name, reaction.count))
+          end
+          table.insert(lines, '> ' .. table.concat(reactions, ' '))
+        end
+        
+        -- 返信間の区切り
+        table.insert(lines, '')
+      end
+      
+      -- バッファにラインを設定
+      vim.api.nvim_buf_set_lines(thread_bufnr, 0, -1, false, lines)
+      vim.api.nvim_buf_set_option(thread_bufnr, 'modifiable', false)
+      
+      -- スレッドウィンドウにバッファを表示
+      if is_valid_window(M.layout.thread_win) then
+        vim.api.nvim_win_set_buf(M.layout.thread_win, thread_bufnr)
+        
+        -- スレッドウィンドウにフォーカス
+        vim.api.nvim_set_current_win(M.layout.thread_win)
+      end
+      
+      notify('スレッド返信を表示しました', vim.log.levels.INFO)
+    else
+      notify('スレッド返信の取得に失敗しました', vim.log.levels.ERROR)
+    end
+  end)
+end
+
+-- スレッド返信を表示
+--- @param thread_ts string スレッドの親メッセージのタイムスタンプ
+--- @param replies table[] 返信メッセージの配列
+--- @param parent_message table|nil 親メッセージ
+--- @return nil
+function M.show_thread_replies(thread_ts, replies, parent_message)
+  -- スレッド表示用のレイアウトを設定
+  M.setup_thread_layout()
+  
+  -- バッファを作成または取得
+  local thread_bufnr = M.get_or_create_buffer('thread-' .. thread_ts)
+  M.layout.thread_buf = thread_bufnr
+  
+  -- バッファを設定
+  setup_buffer_options(thread_bufnr, 'neo-slack-messages')
+  
+  -- スレッド返信を整形
+  local lines = {
+    '# スレッド返信',
+    '',
+  }
+  
+  -- 親メッセージを表示（存在する場合）
+  if parent_message then
+    -- ユーザー名を取得
+    local user_name = parent_message.user or 'Unknown'
+    if type(parent_message.user) == 'string' then
+      local user = state.get_user_by_id(parent_message.user)
+      if user then
+        user_name = user.name
+      end
+    end
+    
+    -- タイムスタンプを整形
+    local timestamp = os.date('%Y-%m-%d %H:%M:%S', tonumber(parent_message.ts:match('^(%d+)')))
+    
+    -- 親メッセージヘッダー
+    table.insert(lines, string.format('## %s (%s) [親メッセージ]', user_name, timestamp))
+    
+    -- 親メッセージ本文
+    local text = parent_message.text or ''
+    for line in text:gmatch('[^\n]+') do
+      table.insert(lines, line)
+    end
+    
+    -- リアクション情報
+    if parent_message.reactions and #parent_message.reactions > 0 then
+      local reactions = {}
+      for _, reaction in ipairs(parent_message.reactions) do
+        table.insert(reactions, string.format(':%s: %d', reaction.name, reaction.count))
+      end
+      table.insert(lines, '> ' .. table.concat(reactions, ' '))
+    end
+    
+    -- 区切り
+    table.insert(lines, '')
+    table.insert(lines, '---')
+    table.insert(lines, '')
+  end
+  
+  -- 返信を古い順に並べ替え
+  table.sort(replies, function(a, b)
+    return a.ts < b.ts
+  end)
+  
+  -- 返信を表示
+  for _, reply in ipairs(replies) do
+    -- ユーザー名を取得
+    local user_name = reply.user or 'Unknown'
+    if type(reply.user) == 'string' then
+      local user = state.get_user_by_id(reply.user)
+      if user then
+        user_name = user.name
+      end
+    end
+    
+    -- タイムスタンプを整形
+    local timestamp = os.date('%Y-%m-%d %H:%M:%S', tonumber(reply.ts:match('^(%d+)')))
+    
+    -- 返信ヘッダー
+    table.insert(lines, string.format('## %s (%s)', user_name, timestamp))
+    
+    -- 返信本文
+    local text = reply.text or ''
+    for line in text:gmatch('[^\n]+') do
+      table.insert(lines, line)
+    end
+    
+    -- リアクション情報
+    if reply.reactions and #reply.reactions > 0 then
+      local reactions = {}
+      for _, reaction in ipairs(reply.reactions) do
+        table.insert(reactions, string.format(':%s: %d', reaction.name, reaction.count))
+      end
+      table.insert(lines, '> ' .. table.concat(reactions, ' '))
+    end
+    
+    -- 返信間の区切り
+    table.insert(lines, '')
+  end
+  
+  -- バッファにラインを設定
+  vim.api.nvim_buf_set_lines(thread_bufnr, 0, -1, false, lines)
+  vim.api.nvim_buf_set_option(thread_bufnr, 'modifiable', false)
+  
+  -- スレッドウィンドウにバッファを表示
+  if is_valid_window(M.layout.thread_win) then
+    vim.api.nvim_win_set_buf(M.layout.thread_win, thread_bufnr)
+    
+    -- スレッドウィンドウにフォーカス
+    vim.api.nvim_set_current_win(M.layout.thread_win)
+  end
+  
+  -- 現在のスレッドを状態に保存
+  state.set_current_thread(thread_ts)
+  
+  notify('スレッド返信を表示しました', vim.log.levels.INFO)
 end
 
 -- チャンネル一覧ウィンドウにフォーカス
