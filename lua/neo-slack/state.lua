@@ -36,6 +36,7 @@ M.thread_messages = {}
 M.starred_channels = {} -- スター付きチャンネルのIDを保存するテーブル
 M.section_collapsed = {} -- セクションの折りたたみ状態を保存するテーブル
 M.custom_sections = {} -- カスタムセクションのリスト
+M.users_cache = {} -- ユーザー情報のキャッシュ
 M.channel_section_map = {} -- チャンネルとセクションの関連付け
 M.initialized = false
 
@@ -327,6 +328,43 @@ function M.reset()
   M.custom_sections = {}
   M.channel_section_map = {}
   M.initialized = false
+  M.users_cache = {}
+end
+
+-- ユーザーIDからユーザー情報を取得
+---@param user_id string ユーザーID
+---@return table|nil ユーザーオブジェクト
+function M.get_user_by_id(user_id)
+  -- キャッシュにユーザー情報があれば、それを返す
+  if M.users_cache[user_id] then
+    return M.users_cache[user_id]
+  end
+  
+  -- APIモジュールを遅延読み込み（循環参照を避けるため）
+  local api = require('neo-slack.api')
+  
+  -- 同期的に使用するためのフラグ
+  local user_data = nil
+  local completed = false
+  
+  -- APIからユーザー情報を取得（非同期）
+  api.get_user_info_by_id(user_id, function(success, data)
+    if success then
+      -- キャッシュに保存
+      M.users_cache[user_id] = data
+      user_data = data
+    end
+    completed = true
+  end)
+  
+  -- 非同期処理が完了するまで少し待機（最大100ms）
+  local wait_count = 0
+  while not completed and wait_count < 10 do
+    vim.wait(10)
+    wait_count = wait_count + 1
+  end
+  
+  return user_data
 end
 
 return M
