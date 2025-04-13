@@ -193,6 +193,25 @@ function M.setup_channels_keymaps(bufnr)
   vim.api.nvim_buf_set_keymap(bufnr, 'n', 'd', '<cmd>lua require("neo-slack.ui").delete_section_current()<CR>', opts)
 end
 
+-- メッセージ一覧のキーマッピングを設定
+---@param bufnr number バッファ番号
+---@return nil
+function M.setup_messages_keymaps(bufnr)
+  local opts = { noremap = true, silent = true }
+  
+  -- q: ウィンドウを閉じる
+  vim.api.nvim_buf_set_keymap(bufnr, 'n', 'q', '<cmd>q<CR>', opts)
+  
+  -- r: メッセージ一覧を更新
+  vim.api.nvim_buf_set_keymap(bufnr, 'n', 'r', '<cmd>lua require("neo-slack").list_messages()<CR>', opts)
+  
+  -- s: メッセージを送信
+  vim.api.nvim_buf_set_keymap(bufnr, 'n', 's', '<cmd>lua require("neo-slack").send_message()<CR>', opts)
+  
+  -- c: チャンネル一覧に戻る
+  vim.api.nvim_buf_set_keymap(bufnr, 'n', 'c', '<cmd>lua require("neo-slack.ui").focus_channels()<CR>', opts)
+}
+
 -- チャンネルを選択またはセクションの折りたたみ/展開
 function M.select_channel_or_toggle_section()
   local line = vim.api.nvim_get_current_line()
@@ -278,6 +297,115 @@ function M.select_channel()
       if is_valid_window(M.layout.messages_win) then
         vim.api.nvim_set_current_win(M.layout.messages_win)
       end
+    end
+  end
+end
+
+-- メッセージ一覧を表示
+--- @param channel string|table チャンネル名またはID、またはチャンネルオブジェクト
+--- @param messages table[] メッセージオブジェクトの配列
+--- @return nil
+function M.show_messages(channel, messages)
+  -- 分割レイアウトを設定
+  M.setup_split_layout()
+  
+  -- チャンネル名を取得
+  local channel_name = channel
+  if type(channel) == 'table' and channel.name then
+    channel_name = channel.name
+  elseif type(channel) == 'string' then
+    -- チャンネルIDからチャンネル名を取得
+    local channel_obj = state.get_channel_by_id(channel)
+    if channel_obj then
+      channel_name = channel_obj.name
+    end
+  end
+  
+  -- バッファを作成または取得
+  local bufnr = M.get_or_create_buffer('messages-' .. channel_name)
+  M.layout.messages_buf = bufnr
+  
+  -- バッファを設定
+  setup_buffer_options(bufnr, 'neo-slack-messages')
+  
+  -- メッセージ一覧を整形
+  local lines = {
+    '# ' .. channel_name .. ' のメッセージ',
+    '',
+  }
+  
+  -- メッセージを古い順に並べ替え
+  table.sort(messages, function(a, b)
+    return a.ts < b.ts
+  end)
+  
+  -- メッセージを表示
+  for _, message in ipairs(messages) do
+    -- ユーザー名を取得
+    local user_name = message.user or 'Unknown'
+    if type(message.user) == 'string' then
+      local user = state.get_user_by_id(message.user)
+      if user then
+        user_name = user.name
+      end
+    end
+    
+    -- タイムスタンプを整形
+    local timestamp = os.date('%Y-%m-%d %H:%M:%S', tonumber(message.ts:match('^(%d+)')))
+    
+    -- メッセージヘッダー
+    table.insert(lines, string.format('## %s (%s)', user_name, timestamp))
+    
+    -- メッセージIDを保存（後で使用）
+    vim.api.nvim_buf_set_var(bufnr, 'message_' .. #lines, message.ts)
+    
+    -- メッセージ本文
+    local text = message.text or ''
+    for line in text:gmatch('[^\n]+') do
+      table.insert(lines, line)
+    end
+    
+    -- スレッド情報
+    if message.thread_ts and message.reply_count and message.reply_count > 0 then
+      table.insert(lines, string.format('> スレッド返信: %d件', message.reply_count))
+    end
+    
+    -- リアクション情報
+    if message.reactions and #message.reactions > 0 then
+      local reactions = {}
+      for _, reaction in ipairs(message.reactions) do
+        table.insert(reactions, string.format(':%s: %d', reaction.name, reaction.count))
+      end
+      table.insert(lines, '> ' .. table.concat(reactions, ' '))
+    end
+    
+    -- メッセージ間の区切り
+    table.insert(lines, '')
+  end
+  
+  -- バッファにラインを設定
+  vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, lines)
+  vim.api.nvim_buf_set_option(bufnr, 'modifiable', false)
+  
+  -- キーマッピングを設定
+  M.setup_messages_keymaps(bufnr)
+  
+  -- メッセージウィンドウにバッファを表示
+  if is_valid_window(M.layout.messages_win) then
+    vim.api.nvim_win_set_buf(M.layout.messages_win, bufnr)
+    
+    -- メッセージウィンドウにフォーカス
+    vim.api.nvim_set_current_win(M.layout.messages_win)
+    
+    -- カーソルを最後の行に移動
+    vim.api.nvim_win_set_cursor(M.layout.messages_win, {#lines, 0})
+  else
+    -- メッセージウィンドウが無効な場合は、レイアウトを再設定
+    M.setup_split_layout()
+    if is_valid_window(M.layout.messages_win) then
+      vim.api.nvim_win_set_buf(M.layout.messages_win, bufnr)
+      vim.api.nvim_set_current_win(M.layout.messages_win)
+      vim.api.nvim_win_set_cursor(M.layout.messages_win, {#lines, 0})
     end
   end
 end
@@ -435,6 +563,19 @@ function M.show_channels(channels)
   
   -- チャンネル一覧のウィンドウにフォーカス
   vim.api.nvim_set_current_win(M.layout.channels_win)
+end
+
+-- チャンネル一覧ウィンドウにフォーカス
+function M.focus_channels()
+  if is_valid_window(M.layout.channels_win) then
+    vim.api.nvim_set_current_win(M.layout.channels_win)
+  else
+    -- チャンネル一覧ウィンドウが無効な場合は、レイアウトを再設定
+    M.setup_split_layout()
+    if is_valid_window(M.layout.channels_win) then
+      vim.api.nvim_set_current_win(M.layout.channels_win)
+    end
+  end
 end
 
 -- イベントハンドラの登録
