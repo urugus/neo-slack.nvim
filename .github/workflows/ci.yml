@@ -30,24 +30,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-      - name: Install StyLua
-        uses: actions/cache@v3
-        id: stylua-cache
-        with:
-          path: ~/.cargo/bin/stylua
-          key: ${{ runner.os }}-stylua-1.0.0
-          
-      - name: Install StyLua if not cached
-        if: steps.stylua-cache.outputs.cache-hit != 'true'
-        uses: actions-rs/cargo@v1
-        with:
-          command: install
-          args: stylua --version=0.18.2
-          
+      
       - name: Run StyLua
-        run: |
-          # フォーマットの問題があっても成功するように設定
-          ~/.cargo/bin/stylua --check lua/ || [ $? -eq 1 ]
+        uses: JohnnyMorganz/stylua-action@v3
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          version: latest
+          args: --check lua/
+        continue-on-error: true  # エラーがあっても続行する
 
   tests:
     name: Tests
