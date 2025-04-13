@@ -82,36 +82,150 @@ end
 ---@param emoji_code string 絵文字コード（例: ":smile:"）
 ---@return string 変換された絵文字または元のコード
 function M.convert_emoji_code(emoji_code)
-  -- vim-emojiプラグインが利用可能かチェック
-  local has_emoji, emoji = pcall(require, 'emoji')
-  if not has_emoji then
-    -- プラグインがない場合は元のコードを返す
-    return emoji_code
-  end
-
   -- 絵文字コードから名前を抽出（コロンを除去）
   local emoji_name = emoji_code:match('^:([^:]+):$')
   if not emoji_name then
     return emoji_code
   end
 
-  -- vim-emojiプラグインを使用して変換
-  local emoji_char = emoji.emoji[emoji_name]
-  if emoji_char then
-    return emoji_char
-  end
-
-  -- カスタム絵文字マッピング（vim-emojiにない場合）
-  local custom_emoji = {
+  -- 基本的な絵文字マッピング
+  local emoji_map = {
+    -- 顔文字
+    ["smile"] = "😄",
+    ["grinning"] = "😀",
+    ["smiley"] = "😃",
+    ["grin"] = "😁",
+    ["laughing"] = "😆",
+    ["sweat_smile"] = "😅",
+    ["joy"] = "😂",
+    ["rofl"] = "🤣",
+    ["relaxed"] = "☺️",
+    ["blush"] = "😊",
+    ["innocent"] = "😇",
+    ["slightly_smiling_face"] = "🙂",
+    ["upside_down_face"] = "🙃",
+    ["wink"] = "😉",
+    ["relieved"] = "😌",
+    ["heart_eyes"] = "😍",
+    ["kissing_heart"] = "😘",
+    ["kissing"] = "😗",
+    ["kissing_smiling_eyes"] = "😙",
+    ["kissing_closed_eyes"] = "😚",
+    ["yum"] = "😋",
+    ["stuck_out_tongue"] = "😛",
+    ["stuck_out_tongue_winking_eye"] = "😜",
+    ["stuck_out_tongue_closed_eyes"] = "😝",
+    ["money_mouth_face"] = "🤑",
+    ["hugs"] = "🤗",
+    ["thinking"] = "🤔",
+    
+    -- 手のジェスチャー
+    ["thumbsup"] = "👍",
+    ["thumbsdown"] = "👎",
+    ["ok_hand"] = "👌",
+    ["clap"] = "👏",
+    ["raised_hands"] = "🙌",
+    ["pray"] = "🙏",
+    
+    -- 動物
+    ["cat"] = "🐱",
+    ["dog"] = "🐶",
+    ["mouse"] = "🐭",
+    ["hamster"] = "🐹",
+    ["rabbit"] = "🐰",
+    ["fox_face"] = "🦊",
+    ["bear"] = "🐻",
+    ["panda_face"] = "🐼",
+    ["koala"] = "🐨",
+    ["tiger"] = "🐯",
+    ["lion"] = "🦁",
+    ["cow"] = "🐮",
+    ["pig"] = "🐷",
+    ["frog"] = "🐸",
+    ["monkey_face"] = "🐵",
+    
+    -- 記号
+    ["heart"] = "❤️",
+    ["yellow_heart"] = "💛",
+    ["green_heart"] = "💚",
+    ["blue_heart"] = "💙",
+    ["purple_heart"] = "💜",
+    ["black_heart"] = "🖤",
+    ["broken_heart"] = "💔",
+    ["fire"] = "🔥",
+    ["star"] = "⭐",
+    ["sparkles"] = "✨",
+    
+    -- カスタム絵文字
     ["うれしい"] = "😊",
     ["clap-nya"] = "👏",
     ["eranyanko"] = "😺",
     ["nekowaiwai"] = "😻",
-    ["tokiwo_umu_nyanko"] = "🐱"
-    -- 必要に応じて追加
+    ["tokiwo_umu_nyanko"] = "🐱",
+    
+    -- 一般的なリアクション
+    ["+1"] = "👍",
+    ["-1"] = "👎",
+    ["eyes"] = "👀",
+    ["tada"] = "🎉",
+    ["100"] = "💯",
+    ["clown_face"] = "🤡",
+    ["question"] = "❓",
+    ["exclamation"] = "❗",
+    ["warning"] = "⚠️",
+    ["bulb"] = "💡",
+    ["rocket"] = "🚀",
+    ["boom"] = "💥",
+    ["zap"] = "⚡",
+    ["muscle"] = "💪",
+    ["metal"] = "🤘",
+    ["ok"] = "🆗",
+    ["new"] = "🆕",
+    ["cool"] = "🆒",
+    ["sos"] = "🆘",
+    ["white_check_mark"] = "✅",
+    ["x"] = "❌",
+    ["heavy_check_mark"] = "✔️",
+    ["heavy_multiplication_x"] = "✖️",
+    ["heavy_plus_sign"] = "➕",
+    ["heavy_minus_sign"] = "➖",
+    ["heavy_division_sign"] = "➗",
+    ["repeat"] = "🔁",
+    ["arrows_counterclockwise"] = "🔄",
+    ["arrow_right"] = "➡️",
+    ["arrow_left"] = "⬅️",
+    ["arrow_up"] = "⬆️",
+    ["arrow_down"] = "⬇️",
+    ["black_large_square"] = "⬛",
+    ["white_large_square"] = "⬜",
+    ["red_circle"] = "🔴",
+    ["large_blue_circle"] = "🔵",
+    ["white_circle"] = "⚪",
+    ["black_circle"] = "⚫",
+    ["radio_button"] = "🔘",
+    ["speech_balloon"] = "💬",
+    ["thought_balloon"] = "💭",
+    ["clock1"] = "🕐",
+    ["clock2"] = "🕑",
+    ["clock3"] = "🕒",
+    ["clock4"] = "🕓",
+    ["clock5"] = "🕔",
+    ["clock6"] = "🕕",
+    ["clock7"] = "🕖",
+    ["clock8"] = "🕗",
+    ["clock9"] = "🕘",
+    ["clock10"] = "🕙",
+    ["clock11"] = "🕚",
+    ["clock12"] = "🕛",
   }
 
-  return custom_emoji[emoji_name] or emoji_code
+  -- vim-emojiプラグインが利用可能な場合はそちらも使用
+  local has_emoji, emoji = pcall(require, 'emoji')
+  if has_emoji and emoji.emoji[emoji_name] then
+    return emoji.emoji[emoji_name]
+  end
+
+  return emoji_map[emoji_name] or emoji_code
 end
 
 -- リアクションを整形（絵文字 + カウント）
