@@ -78,5 +78,50 @@ function M.get_nested(tbl, keys, default)
   end
   return current
 end
+-- 絵文字コードを実際の絵文字に変換
+---@param emoji_code string 絵文字コード（例: ":smile:"）
+---@return string 変換された絵文字または元のコード
+function M.convert_emoji_code(emoji_code)
+  -- vim-emojiプラグインが利用可能かチェック
+  local has_emoji, emoji = pcall(require, 'emoji')
+  if not has_emoji then
+    -- プラグインがない場合は元のコードを返す
+    return emoji_code
+  end
 
+  -- 絵文字コードから名前を抽出（コロンを除去）
+  local emoji_name = emoji_code:match('^:([^:]+):$')
+  if not emoji_name then
+    return emoji_code
+  end
+
+  -- vim-emojiプラグインを使用して変換
+  local emoji_char = emoji.emoji[emoji_name]
+  if emoji_char then
+    return emoji_char
+  end
+
+  -- カスタム絵文字マッピング（vim-emojiにない場合）
+  local custom_emoji = {
+    ["うれしい"] = "😊",
+    ["clap-nya"] = "👏",
+    ["eranyanko"] = "😺",
+    ["nekowaiwai"] = "😻",
+    ["tokiwo_umu_nyanko"] = "🐱"
+    -- 必要に応じて追加
+  }
+
+  return custom_emoji[emoji_name] or emoji_code
+end
+
+-- リアクションを整形（絵文字 + カウント）
+---@param reaction table リアクションオブジェクト
+---@return string 整形されたリアクション文字列
+function M.format_reaction(reaction)
+  local emoji_code = ":" .. reaction.name .. ":"
+  local emoji = M.convert_emoji_code(emoji_code)
+  return emoji .. " " .. reaction.count
+end
+
+return M
 return M

@@ -23,12 +23,14 @@ Neovimから直接Slackを操作できるプラグインです。このプラグ
 
 - Neovim 0.5.0以上
 - [plenary.nvim](https://github.com/nvim-lua/plenary.nvim)
+- [vim-emoji](https://github.com/junegunn/vim-emoji) (絵文字表示のため)
 - [telescope.nvim](https://github.com/nvim-telescope/telescope.nvim) (オプション、検索機能向上のため)
 
 ### vim-plugを使用する場合
 
 ```vim
 Plug 'nvim-lua/plenary.nvim'
+Plug 'junegunn/vim-emoji'
 Plug 'username/neo-slack.nvim'
 ```
 
@@ -37,7 +39,10 @@ Plug 'username/neo-slack.nvim'
 ```lua
 use {
   'username/neo-slack.nvim',
-  requires = { 'nvim-lua/plenary.nvim' }
+  requires = {
+    'nvim-lua/plenary.nvim',
+    'junegunn/vim-emoji'
+  }
 }
 ```
 
@@ -46,7 +51,10 @@ use {
 ```lua
 {
   'username/neo-slack.nvim',
-  dependencies = { 'nvim-lua/plenary.nvim' },
+  dependencies = {
+    'nvim-lua/plenary.nvim',
+    'junegunn/vim-emoji'
+  },
   config = function()
     -- オプション: 明示的に初期化
     require('neo-slack').setup()
