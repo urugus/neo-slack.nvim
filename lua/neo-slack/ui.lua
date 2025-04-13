@@ -590,7 +590,8 @@ function M.open_thread()
   end
   
   -- スレッド返信を取得
-  api.get_thread_replies(state.get_current_channel_id(), current_message_id, function(success, replies)
+  local channel_id = state.get_current_channel()
+  api.get_thread_replies(channel_id, current_message_id, function(success, replies)
     if success and replies then
       -- スレッド表示用のレイアウトを設定
       M.setup_thread_layout()
