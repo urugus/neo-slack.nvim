@@ -214,7 +214,6 @@ function M.setup_messages_keymaps(bufnr)
   -- t: スレッド返信を表示
   vim.api.nvim_buf_set_keymap(bufnr, 'n', 't', '<cmd>lua require("neo-slack.ui").open_thread()<CR>', opts)
 end
-end
 
 -- チャンネルを選択またはセクションの折りたたみ/展開
 function M.select_channel_or_toggle_section()
