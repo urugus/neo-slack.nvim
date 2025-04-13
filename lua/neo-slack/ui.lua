@@ -377,7 +377,7 @@ function M.show_messages(channel, messages)
     if message.reactions and #message.reactions > 0 then
       local reactions = {}
       for _, reaction in ipairs(message.reactions) do
-        table.insert(reactions, string.format(':%s: %d', reaction.name, reaction.count))
+        table.insert(reactions, utils.format_reaction(reaction))
       end
       table.insert(lines, '> ' .. table.concat(reactions, ' '))
     end
@@ -644,7 +644,7 @@ function M.open_thread()
         if reply.reactions and #reply.reactions > 0 then
           local reactions = {}
           for _, reaction in ipairs(reply.reactions) do
-            table.insert(reactions, string.format(':%s: %d', reaction.name, reaction.count))
+            table.insert(reactions, utils.format_reaction(reaction))
           end
           table.insert(lines, '> ' .. table.concat(reactions, ' '))
         end
@@ -721,7 +721,7 @@ function M.show_thread_replies(thread_ts, replies, parent_message)
     if parent_message.reactions and #parent_message.reactions > 0 then
       local reactions = {}
       for _, reaction in ipairs(parent_message.reactions) do
-        table.insert(reactions, string.format(':%s: %d', reaction.name, reaction.count))
+        table.insert(reactions, utils.format_reaction(reaction))
       end
       table.insert(lines, '> ' .. table.concat(reactions, ' '))
     end
