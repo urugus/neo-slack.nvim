@@ -48,13 +48,8 @@ function M.setup(opts, callback)
     if success then
       notify('初期化が完了しました', vim.log.levels.INFO)
       
-      -- デフォルトチャンネルを表示
-      if config.get('auto_open_default_channel', true) then
-        local default_channel = config.get('default_channel')
-        if default_channel and default_channel ~= '' then
-          M.list_channels()
-        end
-      end
+      -- 注意: 自動的にチャンネル一覧を表示しないように変更
+      -- チャンネル一覧を表示するには :SlackChannels コマンドを使用してください
     else
       notify('初期化に失敗しました。詳細はログを確認してください。', vim.log.levels.ERROR)
     end
