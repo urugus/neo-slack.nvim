@@ -480,9 +480,8 @@ function M.show_channels(channels)
         local has_unread = channel.unread_count and channel.unread_count > 0
         local unread = has_unread and string.format(' (%d)', channel.unread_count) or ''
         
-        -- 未読があるチャンネルには "unread_" プレフィックスを追加、既読済みには "read_" プレフィックスを追加
-        local read_status = has_unread and "unread_" or "read_"
-        table.insert(lines, string.format('%s %s %s%s%s', read_status, member_status, prefix, channel.name, unread))
+        -- プレフィックスなしでチャンネル情報を表示
+        table.insert(lines, string.format('%s %s%s%s', member_status, prefix, channel.name, unread))
         
         -- チャンネルIDを保存（後で使用）
         vim.api.nvim_buf_set_var(bufnr, 'channel_' .. #lines, channel.id)
@@ -518,9 +517,8 @@ function M.show_channels(channels)
           local has_unread = channel.unread_count and channel.unread_count > 0
           local unread = has_unread and string.format(' (%d)', channel.unread_count) or ''
           
-          -- 未読があるチャンネルには "unread_" プレフィックスを追加、既読済みには "read_" プレフィックスを追加
-          local read_status = has_unread and "unread_" or "read_"
-          table.insert(lines, string.format('%s %s %s %s%s', read_status, member_status, prefix, channel.name, unread))
+          -- プレフィックスなしでチャンネル情報を表示
+          table.insert(lines, string.format('%s %s %s%s', member_status, prefix, channel.name, unread))
           
           -- チャンネルIDを保存（後で使用）
           vim.api.nvim_buf_set_var(bufnr, 'channel_' .. #lines, channel.id)
@@ -545,9 +543,8 @@ function M.show_channels(channels)
       local has_unread = channel.unread_count and channel.unread_count > 0
       local unread = has_unread and string.format(' (%d)', channel.unread_count) or ''
       
-      -- 未読があるチャンネルには "unread_" プレフィックスを追加、既読済みには "read_" プレフィックスを追加
-      local read_status = has_unread and "unread_" or "read_"
-      table.insert(lines, string.format('%s %s %s %s%s', read_status, member_status, prefix, channel.name, unread))
+      -- プレフィックスなしでチャンネル情報を表示
+      table.insert(lines, string.format('%s %s %s%s', member_status, prefix, channel.name, unread))
       
       -- チャンネルIDを保存（後で使用）
       vim.api.nvim_buf_set_var(bufnr, 'channel_' .. #lines, channel.id)
@@ -883,8 +880,6 @@ end
 --- @return nil
 function M.select_channel()
   local line = vim.api.nvim_get_current_line()
-  -- "unread_" または "read_" プレフィックスを削除
-  line = line:gsub("^unread_", ""):gsub("^read_", "")
   local line_nr = vim.api.nvim_win_get_cursor(0)[1]
   local bufnr = vim.api.nvim_get_current_buf()
   
