@@ -124,4 +124,3 @@ function M.format_reaction(reaction)
 end
 
 return M
-return M
