@@ -210,7 +210,7 @@ function M.setup_messages_keymaps(bufnr)
   
   -- c: チャンネル一覧に戻る
   vim.api.nvim_buf_set_keymap(bufnr, 'n', 'c', '<cmd>lua require("neo-slack.ui").focus_channels()<CR>', opts)
-}
+end
 
 -- チャンネルを選択またはセクションの折りたたみ/展開
 function M.select_channel_or_toggle_section()
