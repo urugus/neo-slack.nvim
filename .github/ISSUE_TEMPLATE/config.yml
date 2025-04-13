@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 質問・ディスカッション
+    url: https://github.com/your-username/neo-slack/discussions
+    about: 質問やディスカッションはこちらでお願いします

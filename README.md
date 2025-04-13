@@ -196,6 +196,40 @@ require('neo-slack').setup({
 - [ ] テスト作成
 - [ ] ドキュメント整備
 
+## 開発者向け情報
+
+### GitHub Actions
+
+このプロジェクトでは、以下のGitHub Actionsワークフローを使用しています：
+
+- **CI（継続的インテグレーション）**: プルリクエストと`main`ブランチへのプッシュ時に実行
+  - Luacheckによる構文チェック
+  - StyLuaによるコードスタイルチェック
+  - Neovim環境でのテスト実行
+
+- **リリース**: タグ（`v*`）作成時に自動的にGitHubリリースを作成
+
+### 開発環境のセットアップ
+
+1. リポジトリをクローン
+2. 依存関係をインストール:
+   ```bash
+   # Luacheck（構文チェック）
+   luarocks install luacheck
+
+   # StyLua（コードフォーマッタ）
+   cargo install stylua
+   ```
+
+3. コミット前にチェックを実行:
+   ```bash
+   # 構文チェック
+   luacheck lua/
+
+   # コードスタイルチェック
+   stylua --check lua/
+   ```
+
 ## 貢献方法
 
 1. このリポジトリをフォーク
