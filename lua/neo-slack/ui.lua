@@ -477,10 +477,12 @@ function M.show_channels(channels)
       for _, channel in ipairs(starred_channels) do
         local prefix = channel.is_private and '🔒' or '#'
         local member_status = channel.is_member and '✓' or ' '
-        local unread = channel.unread_count and channel.unread_count > 0
-          and string.format(' (%d)', channel.unread_count) or ''
+        local has_unread = channel.unread_count and channel.unread_count > 0
+        local unread = has_unread and string.format(' (%d)', channel.unread_count) or ''
         
-        table.insert(lines, string.format('%s %s %s%s', member_status, prefix, channel.name, unread))
+        -- 未読があるチャンネルには "unread_" プレフィックスを追加、既読済みには "read_" プレフィックスを追加
+        local read_status = has_unread and "unread_" or "read_"
+        table.insert(lines, string.format('%s %s %s%s%s', read_status, member_status, prefix, channel.name, unread))
         
         -- チャンネルIDを保存（後で使用）
         vim.api.nvim_buf_set_var(bufnr, 'channel_' .. #lines, channel.id)
@@ -513,10 +515,12 @@ function M.show_channels(channels)
         for _, channel in ipairs(section_channels) do
           local prefix = channel.is_private and '🔒' or '#'
           local member_status = channel.is_member and '✓' or ' '
-          local unread = channel.unread_count and channel.unread_count > 0
-            and string.format(' (%d)', channel.unread_count) or ''
+          local has_unread = channel.unread_count and channel.unread_count > 0
+          local unread = has_unread and string.format(' (%d)', channel.unread_count) or ''
           
-          table.insert(lines, string.format('%s %s %s%s', member_status, prefix, channel.name, unread))
+          -- 未読があるチャンネルには "unread_" プレフィックスを追加、既読済みには "read_" プレフィックスを追加
+          local read_status = has_unread and "unread_" or "read_"
+          table.insert(lines, string.format('%s %s %s %s%s', read_status, member_status, prefix, channel.name, unread))
           
           -- チャンネルIDを保存（後で使用）
           vim.api.nvim_buf_set_var(bufnr, 'channel_' .. #lines, channel.id)
@@ -538,10 +542,12 @@ function M.show_channels(channels)
     for _, channel in ipairs(normal_channels) do
       local prefix = channel.is_private and '🔒' or '#'
       local member_status = channel.is_member and '✓' or ' '
-      local unread = channel.unread_count and channel.unread_count > 0
-        and string.format(' (%d)', channel.unread_count) or ''
+      local has_unread = channel.unread_count and channel.unread_count > 0
+      local unread = has_unread and string.format(' (%d)', channel.unread_count) or ''
       
-      table.insert(lines, string.format('%s %s %s%s', member_status, prefix, channel.name, unread))
+      -- 未読があるチャンネルには "unread_" プレフィックスを追加、既読済みには "read_" プレフィックスを追加
+      local read_status = has_unread and "unread_" or "read_"
+      table.insert(lines, string.format('%s %s %s %s%s', read_status, member_status, prefix, channel.name, unread))
       
       -- チャンネルIDを保存（後で使用）
       vim.api.nvim_buf_set_var(bufnr, 'channel_' .. #lines, channel.id)
@@ -877,6 +883,8 @@ end
 --- @return nil
 function M.select_channel()
   local line = vim.api.nvim_get_current_line()
+  -- "unread_" または "read_" プレフィックスを削除
+  line = line:gsub("^unread_", ""):gsub("^read_", "")
   local line_nr = vim.api.nvim_win_get_cursor(0)[1]
   local bufnr = vim.api.nvim_get_current_buf()
   
@@ -905,7 +913,7 @@ function M.select_channel()
     -- メッセージ一覧のウィンドウにフォーカス
     vim.api.nvim_set_current_win(M.layout.messages_win)
   else
-    -- 従来の方法でチャンネル名を抽出
+    -- 従来の方法でチャンネル名を抽出（"unread_" または "read_" プレフィックスを考慮）
     local channel_name = line:match('[✓%s][#🔒]%s+([%w-_]+)')
     
     if not channel_name then
