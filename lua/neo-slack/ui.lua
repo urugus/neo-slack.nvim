@@ -590,7 +590,11 @@ function M.open_thread()
   end
   
   -- スレッド返信を取得
-  local channel_id = state.get_current_channel()
+  local channel_id = state.get_current_channel() -- 最初の戻り値のみを使用
+  if not channel_id then
+    notify('現在のチャンネルが設定されていません', vim.log.levels.ERROR)
+    return
+  end
   api.get_thread_replies(channel_id, current_message_id, function(success, replies)
     if success and replies then
       -- スレッド表示用のレイアウトを設定
