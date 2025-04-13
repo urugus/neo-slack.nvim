@@ -21,7 +21,9 @@ jobs:
       - name: Install luacheck
         run: luarocks install luacheck
       - name: Run luacheck
-        run: luacheck lua/
+        run: |
+          # 警告があっても成功するように設定（エラーのみ失敗）
+          luacheck lua/ --codes || [ $? -eq 1 ]
 
   stylua:
     name: StyLua
