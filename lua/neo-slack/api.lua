@@ -123,7 +123,7 @@ function M.request_promise(method, endpoint, params, options)
         if not data.ok then
           reject({ error = data.error or 'Unknown API error', data = data })
           return
-        }
+        end
         
         resolve(data)
       end
