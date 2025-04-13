@@ -9,8 +9,34 @@ local M = {}
 -- 通知ヘルパー関数
 ---@param message string 通知メッセージ
 ---@param level number 通知レベル
-function M.notify(message, level)
-  vim.notify('Neo-Slack: ' .. message, level)
+---@param opts table|nil 追加オプション（title, icon など）
+---@return nil
+function M.notify(message, level, opts)
+  opts = opts or {}
+  local title = opts.title or 'Neo-Slack'
+  local prefix = opts.prefix or ''
+  
+  -- プレフィックスが指定されていない場合は、タイトルをプレフィックスとして使用
+  if prefix == '' then
+    prefix = title .. ': '
+  end
+  
+  -- vim.notifyの拡張機能があれば使用（nvim-notify等）
+  if vim.notify and type(vim.notify) == 'function' then
+    vim.notify(prefix .. message, level, {
+      title = title,
+      icon = opts.icon,
+    })
+  else
+    -- フォールバック：標準のエコーメッセージ
+    local msg_type = 'Info'
+    if level == vim.log.levels.ERROR then
+      msg_type = 'Error'
+    elseif level == vim.log.levels.WARN then
+      msg_type = 'Warning'
+    end
+    vim.api.nvim_echo({{prefix .. message, msg_type}}, true, {})
+  end
 end
 
 -- テキストを複数行に分割
@@ -235,6 +261,221 @@ function M.format_reaction(reaction)
   local emoji_code = ":" .. reaction.name .. ":"
   local emoji = M.convert_emoji_code(emoji_code)
   return emoji .. " " .. reaction.count
+end
+
+-- デバッグログ
+---@param message string ログメッセージ
+---@param level number|nil ログレベル（デフォルト: INFO）
+---@return nil
+function M.debug_log(message, level)
+  -- 設定モジュールを直接参照すると循環参照になるため、
+  -- グローバル変数またはvim.gから設定を取得
+  local is_debug = vim.g.neo_slack_debug == 1 or false
+  
+  if is_debug then
+    M.notify('[DEBUG] ' .. message, level or vim.log.levels.INFO)
+  end
+end
+
+-- 非同期処理のためのシンプルなPromiseライクな実装
+---@class Promise
+---@field status string 'pending'|'fulfilled'|'rejected'
+---@field value any 成功時の値
+---@field reason any 失敗時の理由
+---@field then function thenメソッド
+---@field catch function catchメソッド
+---@field finally function finallyメソッド
+M.Promise = {}
+M.Promise.__index = M.Promise
+
+-- Promiseを作成
+---@param executor function Promiseの処理を行う関数
+---@return table Promise
+function M.Promise.new(executor)
+  local self = setmetatable({
+    status = 'pending',
+    value = nil,
+    reason = nil,
+    _on_fulfilled = {},
+    _on_rejected = {},
+    _on_finally = {}
+  }, M.Promise)
+  
+  local function resolve(value)
+    if self.status ~= 'pending' then return end
+    self.status = 'fulfilled'
+    self.value = value
+    
+    vim.schedule(function()
+      for _, callback in ipairs(self._on_fulfilled) do
+        callback(value)
+      end
+      for _, callback in ipairs(self._on_finally) do
+        callback()
+      end
+    end)
+  end
+  
+  local function reject(reason)
+    if self.status ~= 'pending' then return end
+    self.status = 'rejected'
+    self.reason = reason
+    
+    vim.schedule(function()
+      for _, callback in ipairs(self._on_rejected) do
+        callback(reason)
+      end
+      for _, callback in ipairs(self._on_finally) do
+        callback()
+      end
+    end)
+  end
+  
+  local success, err = pcall(executor, resolve, reject)
+  if not success then
+    reject(err)
+  end
+  
+  return self
+end
+
+-- thenメソッド
+---@param on_fulfilled function|nil 成功時のコールバック
+---@param on_rejected function|nil 失敗時のコールバック
+---@return table Promise
+function M.Promise:then(on_fulfilled, on_rejected)
+  local promise = M.Promise.new(function(resolve, reject)
+    if on_fulfilled and type(on_fulfilled) == 'function' then
+      table.insert(self._on_fulfilled, function(value)
+        local success, result = pcall(on_fulfilled, value)
+        if success then
+          resolve(result)
+        else
+          reject(result)
+        end
+      end)
+    else
+      table.insert(self._on_fulfilled, resolve)
+    end
+    
+    if on_rejected and type(on_rejected) == 'function' then
+      table.insert(self._on_rejected, function(reason)
+        local success, result = pcall(on_rejected, reason)
+        if success then
+          resolve(result)
+        else
+          reject(result)
+        end
+      end)
+    else
+      table.insert(self._on_rejected, reject)
+    end
+  end)
+  
+  -- 既に完了している場合は即時実行
+  if self.status == 'fulfilled' and on_fulfilled then
+    vim.schedule(function()
+      local success, result = pcall(on_fulfilled, self.value)
+      if success then
+        promise.value = result
+        promise.status = 'fulfilled'
+      else
+        promise.reason = result
+        promise.status = 'rejected'
+      end
+    end)
+  elseif self.status == 'rejected' and on_rejected then
+    vim.schedule(function()
+      local success, result = pcall(on_rejected, self.reason)
+      if success then
+        promise.value = result
+        promise.status = 'fulfilled'
+      else
+        promise.reason = result
+        promise.status = 'rejected'
+      end
+    end)
+  end
+  
+  return promise
+end
+
+-- catchメソッド
+---@param on_rejected function 失敗時のコールバック
+---@return table Promise
+function M.Promise:catch(on_rejected)
+  return self:then(nil, on_rejected)
+end
+
+-- finallyメソッド
+---@param on_finally function 最終処理のコールバック
+---@return table Promise
+function M.Promise:finally(on_finally)
+  table.insert(self._on_finally, on_finally)
+  return self
+end
+
+-- 複数のPromiseが完了するのを待つ
+---@param promises table Promiseの配列
+---@return table Promise
+function M.Promise.all(promises)
+  return M.Promise.new(function(resolve, reject)
+    if #promises == 0 then
+      resolve({})
+      return
+    end
+    
+    local results = {}
+    local completed = 0
+    
+    for i, promise in ipairs(promises) do
+      promise:then(
+        function(value)
+          results[i] = value
+          completed = completed + 1
+          if completed == #promises then
+            resolve(results)
+          end
+        end,
+        function(reason)
+          reject(reason)
+        end
+      )
+    end
+  end)
+end
+
+-- タイムアウト付きのPromise
+---@param promise table Promise
+---@param timeout number タイムアウト時間（ミリ秒）
+---@return table Promise
+function M.Promise.timeout(promise, timeout)
+  return M.Promise.new(function(resolve, reject)
+    local timer = vim.loop.new_timer()
+    
+    timer:start(timeout, 0, function()
+      timer:stop()
+      timer:close()
+      reject('Timeout after ' .. timeout .. 'ms')
+    end)
+    
+    promise:then(
+      function(value)
+        if timer then
+          timer:stop()
+          timer:close()
+        end
+        resolve(value)
+      end,
+      function(reason)
+        if timer then
+          timer:stop()
+          timer:close()
+        end
+        reject(reason)
+      end
+    )
+  end)
 end
 
 return M

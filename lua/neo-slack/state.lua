@@ -12,17 +12,44 @@
 ---@field messages table チャンネルIDをキーとするメッセージのキャッシュ
 ---@field thread_messages table スレッドタイムスタンプをキーとするスレッドメッセージのキャッシュ
 ---@field initialized boolean プラグインが初期化されたかどうか
--- 循環参照を避けるため、storageモジュールは遅延読み込みする
+
+-- 循環参照を避けるため、必要なモジュールは遅延読み込みする
 local storage
+local events
+local utils
 
 local M = {}
 
--- storageモジュールを取得する関数
+-- 必要なモジュールを取得する関数
 local function get_storage()
   if not storage then
     storage = require('neo-slack.storage')
   end
   return storage
+end
+
+local function get_events()
+  if not events then
+    events = require('neo-slack.core.events')
+  end
+  return events
+end
+
+local function get_utils()
+  if not utils then
+    utils = require('neo-slack.utils')
+  end
+  return utils
+end
+
+-- 通知ヘルパー関数
+---@param message string 通知メッセージ
+---@param level number 通知レベル
+---@param opts table|nil 追加オプション
+local function notify(message, level, opts)
+  opts = opts or {}
+  opts.prefix = 'State: '
+  get_utils().notify(message, level, opts)
 end
 
 -- 状態の初期化
@@ -43,12 +70,18 @@ M.initialized = false
 -- 現在のチャンネルを設定
 ---@param channel_id string チャンネルID
 ---@param channel_name string|nil チャンネル名
-function M.set_current_channel(channel_id, channel_name)
+---@param silent boolean|nil イベントを発行しないかどうか
+function M.set_current_channel(channel_id, channel_name, silent)
   M.current_channel_id = channel_id
   M.current_channel_name = channel_name or channel_id
   -- チャンネルを変更したらスレッド情報をリセット
   M.current_thread_ts = nil
   M.current_thread_message = nil
+  
+  -- イベントを発行
+  if not silent then
+    get_events().emit('state:channel_changed', channel_id, channel_name)
+  end
 end
 
 -- 現在のチャンネルを取得
@@ -61,9 +94,15 @@ end
 -- 現在のスレッドを設定
 ---@param thread_ts string スレッドのタイムスタンプ
 ---@param thread_message table|nil スレッドの親メッセージ
-function M.set_current_thread(thread_ts, thread_message)
+---@param silent boolean|nil イベントを発行しないかどうか
+function M.set_current_thread(thread_ts, thread_message, silent)
   M.current_thread_ts = thread_ts
   M.current_thread_message = thread_message
+  
+  -- イベントを発行
+  if not silent then
+    get_events().emit('state:thread_changed', thread_ts, thread_message)
+  end
 end
 
 -- 現在のスレッドを取得
@@ -75,8 +114,14 @@ end
 
 -- チャンネル一覧を設定
 ---@param channels table[] チャンネルオブジェクトの配列
-function M.set_channels(channels)
+---@param silent boolean|nil イベントを発行しないかどうか
+function M.set_channels(channels, silent)
   M.channels = channels or {}
+  
+  -- イベントを発行
+  if not silent then
+    get_events().emit('state:channels_updated', M.channels)
+  end
 end
 
 -- チャンネル一覧を取得
@@ -112,8 +157,14 @@ end
 -- メッセージを設定
 ---@param channel_id string チャンネルID
 ---@param messages table[] メッセージオブジェクトの配列
-function M.set_messages(channel_id, messages)
+---@param silent boolean|nil イベントを発行しないかどうか
+function M.set_messages(channel_id, messages, silent)
   M.messages[channel_id] = messages or {}
+  
+  -- イベントを発行
+  if not silent then
+    get_events().emit('state:messages_updated', channel_id, M.messages[channel_id])
+  end
 end
 
 -- メッセージを取得
@@ -126,8 +177,14 @@ end
 -- スレッドメッセージを設定
 ---@param thread_ts string スレッドのタイムスタンプ
 ---@param messages table[] メッセージオブジェクトの配列
-function M.set_thread_messages(thread_ts, messages)
+---@param silent boolean|nil イベントを発行しないかどうか
+function M.set_thread_messages(thread_ts, messages, silent)
   M.thread_messages[thread_ts] = messages or {}
+  
+  -- イベントを発行
+  if not silent then
+    get_events().emit('state:thread_messages_updated', thread_ts, M.thread_messages[thread_ts])
+  end
 end
 
 -- スレッドメッセージを取得
@@ -153,8 +210,14 @@ end
 
 -- 初期化状態を設定
 ---@param initialized boolean 初期化されたかどうか
-function M.set_initialized(initialized)
+---@param silent boolean|nil イベントを発行しないかどうか
+function M.set_initialized(initialized, silent)
   M.initialized = initialized
+  
+  -- イベントを発行
+  if not silent then
+    get_events().emit('state:initialized_changed', initialized)
+  end
 end
 
 -- 初期化状態を取得
@@ -166,13 +229,19 @@ end
 -- スター付きチャンネルを設定
 ---@param channel_id string チャンネルID
 ---@param is_starred boolean スター付きかどうか
-function M.set_channel_starred(channel_id, is_starred)
+---@param silent boolean|nil イベントを発行しないかどうか
+function M.set_channel_starred(channel_id, is_starred, silent)
   if is_starred then
     -- スター付きに追加
     M.starred_channels[channel_id] = true
   else
     -- スター付きから削除
     M.starred_channels[channel_id] = nil
+  end
+  
+  -- イベントを発行
+  if not silent then
+    get_events().emit('state:channel_starred_changed', channel_id, is_starred)
   end
 end
 
@@ -331,6 +400,22 @@ function M.reset()
   M.users_cache = {}
 end
 
+-- ユーザー情報をキャッシュに設定
+---@param user_id string ユーザーID
+---@param user_data table ユーザー情報
+---@param silent boolean|nil イベントを発行しないかどうか
+---@return table ユーザー情報
+function M.set_user_cache(user_id, user_data, silent)
+  M.users_cache[user_id] = user_data
+  
+  -- イベントを発行
+  if not silent then
+    get_events().emit('state:user_cache_updated', user_id, user_data)
+  end
+  
+  return user_data
+end
+
 -- ユーザーIDからユーザー情報を取得
 ---@param user_id string ユーザーID
 ---@return table|nil ユーザーオブジェクト
@@ -340,31 +425,23 @@ function M.get_user_by_id(user_id)
     return M.users_cache[user_id]
   end
   
-  -- APIモジュールを遅延読み込み（循環参照を避けるため）
-  local api = require('neo-slack.api')
+  -- キャッシュにない場合はイベントを発行して取得を要求
+  get_events().emit('api:get_user_info_by_id', user_id)
   
-  -- 同期的に使用するためのフラグ
-  local user_data = nil
-  local completed = false
-  
-  -- APIからユーザー情報を取得（非同期）
-  api.get_user_info_by_id(user_id, function(success, data)
-    if success then
-      -- キャッシュに保存
-      M.users_cache[user_id] = data
-      user_data = data
-    end
-    completed = true
-  end)
-  
-  -- 非同期処理が完了するまで少し待機（最大100ms）
-  local wait_count = 0
-  while not completed and wait_count < 10 do
-    vim.wait(10)
-    wait_count = wait_count + 1
-  end
-  
-  return user_data
+  -- nilを返す（非同期で取得するため）
+  return nil
 end
+
+-- APIモジュールからのイベントハンドラを登録
+get_events().on('api:user_info_by_id_loaded', function(user_id, user_data)
+  -- キャッシュに保存
+  M.set_user_cache(user_id, user_data, true)
+end)
+
+-- 現在のチャンネルIDを要求するイベントのハンドラを登録
+get_events().on('api:get_current_channel', function()
+  -- 現在のチャンネルIDを返す
+  get_events().emit('api:current_channel', M.current_channel_id)
+end)
 
 return M
