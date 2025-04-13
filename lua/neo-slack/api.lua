@@ -226,10 +226,13 @@ function M.get_channels(callback)
   local params = {
     exclude_archived = true,
     types = 'public_channel,private_channel',
-    limit = 1000  -- より多くのチャンネルを取得
+    limit = 1000,  -- より多くのチャンネルを取得
+    include_num_members = true,  -- メンバー数を含める
+    exclude_archived = true
   }
   
-  M.request('GET', 'conversations.list', params, function(success, data)
+  -- users.conversations を使用して、未読カウントを含むチャンネル一覧を取得
+  M.request('GET', 'users.conversations', params, function(success, data)
     if success then
       callback(true, data.channels)
     else
@@ -240,7 +243,7 @@ function M.get_channels(callback)
         -- ユーザートークン（xoxp-）を使用するための情報を追加
         notify('チャンネル一覧の取得に失敗しました - 権限不足 (missing_scope)\n' ..
                'Slackトークンに必要な権限がありません。\n' ..
-               '必要な権限: channels:read, groups:read, im:read, mpim:read\n' ..
+               '必要な権限: channels:read, groups:read, im:read, mpim:read, users:read\n' ..
                'ユーザー自身として送信するには、ボットトークン（xoxb-）ではなく\n' ..
                'ユーザートークン（xoxp-）を使用してください。\n' ..
                '1. https://api.slack.com/apps にアクセス\n' ..
