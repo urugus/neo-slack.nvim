@@ -20,18 +20,18 @@ function M.split_lines(text)
   if not text or text == '' then
     return {'(内容なし)'}
   end
-  
+
   -- 改行で分割
   local lines = {}
   for line in text:gmatch('[^\r\n]+') do
     table.insert(lines, line)
   end
-  
+
   -- 空の場合
   if #lines == 0 then
     return {'(内容なし)'}
   end
-  
+
   return lines
 end
 

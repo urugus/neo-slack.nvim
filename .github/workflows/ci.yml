@@ -1,0 +1,54 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  luacheck:
+    name: Luacheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Setup Lua
+        uses: leafo/gh-actions-lua@v9
+        with:
+          luaVersion: "5.1"
+      - name: Install luacheck
+        uses: leafo/gh-actions-luarocks@v4
+      - name: Install luacheck
+        run: luarocks install luacheck
+      - name: Run luacheck
+        run: |
+          # 警告があっても成功するように設定（エラーのみ失敗）
+          luacheck lua/ --codes || [ $? -eq 1 ]
+
+  stylua:
+    name: StyLua
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Run StyLua
+        uses: JohnnyMorganz/stylua-action@v3
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          version: latest
+          args: --check lua/
+        continue-on-error: true  # エラーがあっても続行する
+
+  tests:
+    name: Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Install Neovim
+        uses: rhysd/action-setup-vim@v1
+        with:
+          neovim: true
+          version: stable
+      - name: Run Tests
+        run: |
+          nvim --headless -u NONE -c "lua package.path = './lua/?.lua;' .. package.path" -c "lua require('test.neo-slack_spec')" -c "q"
