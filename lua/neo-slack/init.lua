@@ -3,40 +3,25 @@
 --- プラグインの初期化と主要な機能を提供します
 ---@brief ]]
 
+-- コアモジュール
+local core = require('neo-slack.core')
+local events = require('neo-slack.core.events')
+local config = require('neo-slack.core.config')
+
+-- 機能モジュール
 local api = require('neo-slack.api')
 local storage = require('neo-slack.storage')
 local utils = require('neo-slack.utils')
 local notification = require('neo-slack.notification')
 local state = require('neo-slack.state')
--- ui モジュールは循環参照を避けるため、後で読み込む
-local ui
+local ui = require('neo-slack.ui')
 
 ---@class NeoSlack
 ---@field config NeoSlackConfig 設定オブジェクト
 local M = {}
 
--- デフォルト設定
----@class NeoSlackConfig
----@field token string Slack APIトークン
----@field default_channel string デフォルトチャンネル
----@field refresh_interval number 更新間隔（秒）
----@field notification boolean 通知の有効/無効
----@field keymaps table キーマッピング設定
----@field debug boolean デバッグモード
-M.config = {
-  token = '',
-  default_channel = 'general',
-  refresh_interval = 30,
-  notification = true,
-  debug = false,
-  keymaps = {
-    toggle = '<leader>ss',
-    channels = '<leader>sc',
-    messages = '<leader>sm',
-    reply = '<leader>sr',
-    react = '<leader>se',
-  }
-}
+-- 設定をエクスポート
+M.config = config.current
 
 -- 通知ヘルパー関数
 ---@param message string 通知メッセージ
@@ -53,37 +38,16 @@ end
 --- @param opts table|nil 設定オプション
 --- @return boolean 初期化に成功したかどうか
 function M.setup(opts)
-  opts = opts or {}
-  M.config = utils.deep_merge(M.config, opts)
-  
-  -- Vimスクリプトから設定を取得（Luaの設定が優先）
-  if M.config.token == '' and vim.g.neo_slack_token then
-    M.config.token = vim.g.neo_slack_token
-  end
-  
-  if vim.g.neo_slack_default_channel then
-    M.config.default_channel = vim.g.neo_slack_default_channel
-  end
-  
-  if vim.g.neo_slack_refresh_interval then
-    M.config.refresh_interval = vim.g.neo_slack_refresh_interval
-  end
-  
-  if vim.g.neo_slack_notification ~= nil then
-    M.config.notification = vim.g.neo_slack_notification == 1
-  end
-  
-  if vim.g.neo_slack_debug ~= nil then
-    M.config.debug = vim.g.neo_slack_debug == 1
-  end
+  -- 設定の初期化
+  config.setup(opts)
   
   -- トークンの取得を試みる（優先順位: 1.設定パラメータ 2.保存済みトークン 3.ユーザー入力）
-  if M.config.token == '' then
+  if config.get('token') == '' then
     -- ストレージからトークンを読み込み
     local saved_token = storage.load_token()
     
     if saved_token then
-      M.config.token = saved_token
+      config.set('token', saved_token)
       notify('保存されたトークンを読み込みました', vim.log.levels.INFO)
     else
       -- トークンの入力を求める
@@ -92,13 +56,15 @@ function M.setup(opts)
       return false -- プロンプト後に再度setup()が呼ばれるため、ここで終了
     end
   end
+  
   -- APIクライアントの初期化
-  api.setup(M.config.token)
+  api.setup(config.get('token'))
   
   -- 通知システムの初期化
-  if M.config.notification then
-    notification.setup(M.config.refresh_interval)
+  if config.get('notification') then
+    notification.setup(config.get('refresh_interval'))
   end
+  
   -- スター付きチャンネルの情報を読み込み
   local starred_channels = storage.load_starred_channels()
   state.set_starred_channels(starred_channels)
@@ -116,15 +82,50 @@ function M.setup(opts)
   
   -- 状態を初期化済みに設定
   state.set_initialized(true)
-  state.set_initialized(true)
+  
+  -- イベントハンドラの登録
+  M.register_event_handlers()
   
   notify('初期化完了', vim.log.levels.INFO)
   
-  if M.config.debug then
+  if config.get('debug') then
     notify('デバッグモードが有効です', vim.log.levels.INFO)
   end
   
   return true
+end
+
+--- イベントハンドラを登録
+function M.register_event_handlers()
+  -- チャンネル選択イベント
+  events.on('channel_selected', function(channel_id, channel_name)
+    M.select_channel(channel_id, channel_name)
+  end)
+  
+  -- メッセージ送信イベント
+  events.on('message_sent', function(channel, text)
+    M.send_message(channel, text)
+  end)
+  
+  -- メッセージ返信イベント
+  events.on('message_replied', function(message_ts, text)
+    M.reply_message(message_ts, text)
+  end)
+  
+  -- スレッド返信イベント
+  events.on('thread_replied', function(thread_ts, text)
+    M.reply_to_thread(thread_ts, text)
+  end)
+  
+  -- リアクション追加イベント
+  events.on('reaction_added', function(message_ts, emoji)
+    M.add_reaction(message_ts, emoji)
+  end)
+  
+  -- ファイルアップロードイベント
+  events.on('file_uploaded', function(channel, file_path)
+    M.upload_file(channel, file_path)
+  end)
 end
 
 --- Slackの接続状態を表示
@@ -177,8 +178,8 @@ function M.validate_and_save_token(token)
         notify('トークンを保存しました', vim.log.levels.INFO)
         
         -- 設定を更新して初期化を続行
-        M.config.token = token
-        M.setup(M.config)
+        config.set('token', token)
+        M.setup(config.get())
       else
         notify('トークンの保存に失敗しました', vim.log.levels.ERROR)
       end
@@ -197,7 +198,7 @@ end
 --- @return boolean 削除に成功したかどうか
 function M.delete_token(prompt_new)
   if storage.delete_token() then
-    M.config.token = ''
+    config.set('token', '')
     notify('保存されたトークンを削除しました', vim.log.levels.INFO)
     
     -- 新しいトークンの入力を促す
@@ -259,7 +260,7 @@ end
 function M.list_messages(channel)
   -- チャンネルが指定されていない場合は、現在のチャンネルまたはデフォルトチャンネルを使用
   local channel_id, channel_name = state.get_current_channel()
-  channel = channel or channel_id or M.config.default_channel
+  channel = channel or channel_id or config.get('default_channel')
   
   api.get_messages(channel, function(success, messages)
     if success then
@@ -282,15 +283,20 @@ end
 function M.send_message(channel, ...)
   -- チャンネルが指定されていない場合は、現在のチャンネルまたはデフォルトチャンネルを使用
   local channel_id = state.get_current_channel()
-  channel = channel or channel_id or M.config.default_channel
+  channel = channel or channel_id or config.get('default_channel')
   local message = table.concat({...}, ' ')
   
   -- メッセージ送信処理
   local function do_send(text)
     api.send_message(channel, text, function(success)
       if success then
+        -- メッセージ送信イベントを発行
+        events.emit('message_sent_success', channel, text)
         -- 現在表示中のメッセージ一覧を更新
         M.list_messages(channel)
+      else
+        -- メッセージ送信失敗イベントを発行
+        events.emit('message_sent_failure', channel, text)
       end
     end)
   end
@@ -325,6 +331,9 @@ function M.reply_message(message_ts, ...)
     api.reply_message(message_ts, text, function(success)
       -- 成功/失敗の通知はAPI層で行われる
       if success then
+        -- 返信成功イベントを発行
+        events.emit('message_replied_success', message_ts, text)
+        
         -- スレッドが表示されている場合は、スレッド一覧を更新
         local current_thread_ts = state.get_current_thread()
         if current_thread_ts == message_ts then
@@ -333,6 +342,9 @@ function M.reply_message(message_ts, ...)
           -- 現在表示中のメッセージ一覧を更新
           M.list_messages(channel_id)
         end
+      else
+        -- 返信失敗イベントを発行
+        events.emit('message_replied_failure', message_ts, text)
       end
     end)
   end
@@ -409,6 +421,9 @@ function M.add_reaction(message_ts, emoji)
     api.add_reaction(message_ts, reaction, function(success)
       -- 成功/失敗の通知はAPI層で行われる
       if success then
+        -- リアクション追加成功イベントを発行
+        events.emit('reaction_added_success', message_ts, reaction)
+        
         -- スレッドが表示されている場合は、スレッド一覧を更新
         local current_thread_ts = state.get_current_thread()
         if current_thread_ts then
@@ -417,6 +432,9 @@ function M.add_reaction(message_ts, emoji)
           -- 現在表示中のメッセージ一覧を更新
           M.list_messages(channel_id)
         end
+      else
+        -- リアクション追加失敗イベントを発行
+        events.emit('reaction_added_failure', message_ts, reaction)
       end
     end)
   end
@@ -444,15 +462,20 @@ end
 function M.upload_file(channel, file_path)
   -- チャンネルが指定されていない場合は、現在のチャンネルまたはデフォルトチャンネルを使用
   local channel_id = state.get_current_channel()
-  channel = channel or channel_id or M.config.default_channel
+  channel = channel or channel_id or config.get('default_channel')
   
   -- ファイルアップロード処理
   local function do_upload(path)
     api.upload_file(channel, path, function(success)
       -- 成功/失敗の通知はAPI層で行われる
       if success then
+        -- ファイルアップロード成功イベントを発行
+        events.emit('file_uploaded_success', channel, path)
         -- 現在表示中のメッセージ一覧を更新
         M.list_messages(channel)
+      else
+        -- ファイルアップロード失敗イベントを発行
+        events.emit('file_uploaded_failure', channel, path)
       end
     end)
   end
@@ -469,7 +492,8 @@ function M.upload_file(channel, file_path)
   end
 end
 
--- 循環参照を避けるため、モジュールの最後でuiを読み込む
-ui = require('neo-slack.ui')
+-- コアモジュールをエクスポート
+M.core = core
+M.events = events
 
 return M
