@@ -11,14 +11,14 @@ endif
 syntax match neoSlackChannelsHeader /^# .*$/
 
 " チャンネル情報
-syntax match neoSlackChannelPublic /^. # .*$/
-syntax match neoSlackChannelPrivate /^. 🔒 .*$/
-syntax match neoSlackChannelJoined /^✓ [#🔒] .*$/
+syntax match neoSlackChannelPublic /^read_. # .*$\|^. # .*$/
+syntax match neoSlackChannelPrivate /^read_. 🔒 .*$\|^. 🔒 .*$/
+syntax match neoSlackChannelJoined /^read_✓ [#🔒] .*$\|^✓ [#🔒] .*$/
 syntax match neoSlackChannelUnread /([0-9]\+)$/
 
 " 未読/既読状態
-syntax match neoSlackChannelUnreadState /.*unread$/
-syntax match neoSlackChannelReadState /.*read$/
+syntax match neoSlackChannelUnreadState /^unread_.*$/
+syntax match neoSlackChannelReadState /^read_.*$/
 
 " ハイライトの定義
 highlight default link neoSlackChannelsHeader Title
