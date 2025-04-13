@@ -114,7 +114,7 @@ function M.register_event_handlers()
       M.list_messages(channel_id)
     end
   end)
-}
+end
 
 --- Slackの接続状態を表示
 --- @return nil
