@@ -30,6 +30,13 @@ local function notify(message, level)
   utils.notify(message, level)
 end
 
+-- ウィンドウが有効かどうかをチェック
+---@param win_id number|nil ウィンドウID
+---@return boolean 有効かどうか
+local function is_valid_window(win_id)
+  return win_id ~= nil and vim.api.nvim_win_is_valid(win_id)
+end
+
 -- バッファオプションを設定
 ---@param bufnr number バッファ番号
 ---@param filetype string ファイルタイプ
@@ -45,14 +52,14 @@ end
 ---@return nil
 function M.setup_split_layout()
   -- 既存のスレッドウィンドウを閉じる
-  if M.layout.thread_win and vim.api.nvim_win_is_valid(M.layout.thread_win) then
+  if is_valid_window(M.layout.thread_win) then
     vim.api.nvim_win_close(M.layout.thread_win, true)
     M.layout.thread_win = nil
     M.layout.thread_buf = nil
   end
   
   -- チャンネル一覧用のウィンドウが存在しない場合は作成
-  if not M.layout.channels_win or not vim.api.nvim_win_is_valid(M.layout.channels_win) then
+  if not is_valid_window(M.layout.channels_win) then
     -- 現在のウィンドウを全画面に
     vim.cmd('only')
     
@@ -79,9 +86,11 @@ function M.setup_thread_layout()
   M.setup_split_layout()
   
   -- スレッド用のウィンドウが存在しない場合は作成
-  if not M.layout.thread_win or not vim.api.nvim_win_is_valid(M.layout.thread_win) then
+  if not is_valid_window(M.layout.thread_win) then
     -- メッセージウィンドウにフォーカス
-    vim.api.nvim_set_current_win(M.layout.messages_win)
+    if is_valid_window(M.layout.messages_win) then
+      vim.api.nvim_set_current_win(M.layout.messages_win)
+    end
     
     -- 右側に新しいウィンドウを作成（スレッド用）
     vim.cmd('rightbelow vsplit')
@@ -97,7 +106,9 @@ function M.setup_thread_layout()
     
     -- メッセージウィンドウに戻って幅を調整
     vim.cmd('wincmd h')
-    vim.api.nvim_win_set_width(M.layout.messages_win, thread_width)
+    if is_valid_window(M.layout.messages_win) then
+      vim.api.nvim_win_set_width(M.layout.messages_win, thread_width)
+    end
     
     -- スレッドウィンドウに戻る
     vim.cmd('wincmd l')
@@ -237,7 +248,15 @@ function M.select_channel()
     events.emit('channel_selected', channel_id, channel_name)
     
     -- メッセージ一覧のウィンドウにフォーカス
-    vim.api.nvim_set_current_win(M.layout.messages_win)
+    if is_valid_window(M.layout.messages_win) then
+      vim.api.nvim_set_current_win(M.layout.messages_win)
+    else
+      -- メッセージウィンドウが無効な場合は、レイアウトを再設定
+      M.setup_split_layout()
+      if is_valid_window(M.layout.messages_win) then
+        vim.api.nvim_set_current_win(M.layout.messages_win)
+      end
+    end
   else
     -- 従来の方法でチャンネル名を抽出（"unread_" または "read_" プレフィックスを考慮）
     local channel_name = line:match('[✓%s][#🔒]%s+([%w-_]+)')
@@ -251,208 +270,15 @@ function M.select_channel()
     events.emit('channel_selected', channel_name, channel_name)
     
     -- メッセージ一覧のウィンドウにフォーカス
-    vim.api.nvim_set_current_win(M.layout.messages_win)
-  end
-end
-
--- チャンネルをスター付き/解除
-function M.toggle_star_channel()
-  local line = vim.api.nvim_get_current_line()
-  local line_nr = vim.api.nvim_win_get_cursor(0)[1]
-  local bufnr = vim.api.nvim_get_current_buf()
-  
-  -- チャンネルIDを直接取得（行番号から）
-  local ok, channel_id = pcall(vim.api.nvim_buf_get_var, bufnr, 'channel_' .. line_nr)
-  
-  if ok and channel_id then
-    -- チャンネル名を抽出（表示用）
-    local channel_name = line:match('[#🔒]%s+([%w-_]+)')
-    if not channel_name then
-      channel_name = "選択したチャンネル"
-    end
-    
-    -- スター付き状態を切り替え
-    local is_starred = state.is_channel_starred(channel_id)
-    state.set_channel_starred(channel_id, not is_starred)
-    
-    -- スター付きチャンネルを保存
-    state.save_starred_channels()
-    
-    -- 通知
-    if is_starred then
-      notify(channel_name .. ' のスターを解除しました', vim.log.levels.INFO)
+    if is_valid_window(M.layout.messages_win) then
+      vim.api.nvim_set_current_win(M.layout.messages_win)
     else
-      notify(channel_name .. ' にスターを付けました', vim.log.levels.INFO)
+      -- メッセージウィンドウが無効な場合は、レイアウトを再設定
+      M.setup_split_layout()
+      if is_valid_window(M.layout.messages_win) then
+        vim.api.nvim_set_current_win(M.layout.messages_win)
+      end
     end
-    
-    -- チャンネル一覧を更新
-    events.emit('refresh_channels')
-  else
-    notify('チャンネルを選択してください', vim.log.levels.ERROR)
-  end
-end
-
--- セクション作成ダイアログを表示
-function M.create_section_dialog()
-  vim.ui.input({ prompt = 'セクション名: ' }, function(input)
-    if input and input ~= '' then
-      local section_id = state.add_section(input)
-      -- セクション情報を保存
-      state.save_custom_sections()
-      -- チャンネル一覧を更新
-      events.emit('refresh_channels')
-      notify('セクション「' .. input .. '」を作成しました', vim.log.levels.INFO)
-    end
-  end)
-end
-
--- セクション編集ダイアログを表示
----@param section_id string セクションID
-function M.edit_section_dialog(section_id)
-  local section = state.custom_sections[section_id]
-  if not section then return end
-  
-  vim.ui.input({
-    prompt = 'セクション名: ',
-    default = section.name
-  }, function(input)
-    if input and input ~= '' then
-      section.name = input
-      -- セクション情報を保存
-      state.save_custom_sections()
-      -- チャンネル一覧を更新
-      events.emit('refresh_channels')
-      notify('セクション名を「' .. input .. '」に変更しました', vim.log.levels.INFO)
-    end
-  end)
-end
-
--- セクション削除確認ダイアログを表示
----@param section_id string セクションID
-function M.delete_section_dialog(section_id)
-  local section = state.custom_sections[section_id]
-  if not section then return end
-  
-  vim.ui.input({
-    prompt = 'セクション「' .. section.name .. '」を削除しますか？ (y/N): '
-  }, function(input)
-    if input and (input:lower() == 'y' or input:lower() == 'yes') then
-      state.remove_section(section_id)
-      -- セクション情報を保存
-      state.save_custom_sections()
-      state.save_channel_section_map()
-      -- チャンネル一覧を更新
-      events.emit('refresh_channels')
-      notify('セクション「' .. section.name .. '」を削除しました', vim.log.levels.INFO)
-    end
-  end)
-end
-
--- チャンネルをセクションに割り当てるダイアログを表示
----@param channel_id string チャンネルID
-function M.assign_channel_dialog(channel_id)
-  local channel = state.get_channel_by_id(channel_id)
-  if not channel then return end
-  
-  -- セクション一覧を作成
-  local sections = {}
-  table.insert(sections, { id = nil, name = '(なし)' })
-  for id, section in pairs(state.custom_sections) do
-    table.insert(sections, { id = id, name = section.name })
-  end
-  
-  -- セクション選択肢を作成
-  local choices = {}
-  for i, section in ipairs(sections) do
-    table.insert(choices, i .. '. ' .. section.name)
-  end
-  
-  -- 現在のセクションを取得
-  local current_section_id = state.get_channel_section(channel_id)
-  local current_index = 1
-  for i, section in ipairs(sections) do
-    if section.id == current_section_id then
-      current_index = i
-      break
-    end
-  end
-  
-  vim.ui.select(choices, {
-    prompt = 'チャンネル「' .. channel.name .. '」のセクションを選択:',
-    default = current_index
-  }, function(choice, idx)
-    if choice and idx then
-      local section = sections[idx]
-      state.assign_channel_to_section(channel_id, section.id)
-      -- セクション情報を保存
-      state.save_channel_section_map()
-      -- チャンネル一覧を更新
-      events.emit('refresh_channels')
-      notify('チャンネル「' .. channel.name .. '」を' ..
-        (section.id and ('セクション「' .. section.name .. '」に割り当てました') or 'セクションから解除しました'),
-        vim.log.levels.INFO)
-    end
-  end)
-end
-
--- 現在の行のチャンネルをセクションに割り当て
-function M.assign_channel_to_section_current()
-  local line_nr = vim.api.nvim_win_get_cursor(0)[1]
-  local bufnr = vim.api.nvim_get_current_buf()
-  
-  -- チャンネルIDを直接取得（行番号から）
-  local ok, channel_id = pcall(vim.api.nvim_buf_get_var, bufnr, 'channel_' .. line_nr)
-  
-  if ok and channel_id then
-    M.assign_channel_dialog(channel_id)
-  else
-    notify('チャンネルを選択してください', vim.log.levels.ERROR)
-  end
-end
-
--- 現在の行のセクションを編集
-function M.edit_section_current()
-  local line = vim.api.nvim_get_current_line()
-  local line_nr = vim.api.nvim_win_get_cursor(0)[1]
-  local bufnr = vim.api.nvim_get_current_buf()
-  
-  -- セクションヘッダーかどうかを判断
-  if line:match('^## [▶▼]') then
-    -- セクションIDを取得
-    local ok, section_id = pcall(vim.api.nvim_buf_get_var, bufnr, 'section_' .. line_nr)
-    
-    if ok and section_id then
-      M.edit_section_dialog(section_id)
-    elseif line:match('★ スター付き') then
-      notify('スター付きセクションは編集できません', vim.log.levels.WARN)
-    elseif line:match('チャンネル$') then
-      notify('デフォルトのチャンネルセクションは編集できません', vim.log.levels.WARN)
-    end
-  else
-    notify('セクションヘッダーを選択してください', vim.log.levels.ERROR)
-  end
-end
-
--- 現在の行のセクションを削除
-function M.delete_section_current()
-  local line = vim.api.nvim_get_current_line()
-  local line_nr = vim.api.nvim_win_get_cursor(0)[1]
-  local bufnr = vim.api.nvim_get_current_buf()
-  
-  -- セクションヘッダーかどうかを判断
-  if line:match('^## [▶▼]') then
-    -- セクションIDを取得
-    local ok, section_id = pcall(vim.api.nvim_buf_get_var, bufnr, 'section_' .. line_nr)
-    
-    if ok and section_id then
-      M.delete_section_dialog(section_id)
-    elseif line:match('★ スター付き') then
-      notify('スター付きセクションは削除できません', vim.log.levels.WARN)
-    elseif line:match('チャンネル$') then
-      notify('デフォルトのチャンネルセクションは削除できません', vim.log.levels.WARN)
-    end
-  else
-    notify('セクションヘッダーを選択してください', vim.log.levels.ERROR)
   end
 end
 
