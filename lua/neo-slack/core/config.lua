@@ -16,6 +16,9 @@ M.defaults = {
   refresh_interval = 30,
   notification = true,
   debug = false,
+  auto_reconnect = true,
+  reconnect_interval = 300, -- 5分
+  auto_open_default_channel = true,
   layout = {
     type = 'split',  -- 'split', 'float', 'tab', 'telescope'
     channels = {
@@ -37,6 +40,15 @@ M.defaults = {
     messages = '<leader>sm',
     reply = '<leader>sr',
     react = '<leader>se',
+  },
+  initialization = {
+    async = true,
+    timeout = 30, -- 初期化タイムアウト（秒）
+    retry = {
+      enabled = true,
+      max_attempts = 3,
+      delay = 5, -- 再試行までの遅延（秒）
+    }
   }
 }
 
@@ -88,6 +100,21 @@ function M.load_from_vim_globals()
     M.current.debug = vim.g.neo_slack_debug == 1
   end
   
+  -- 自動再接続
+  if vim.g.neo_slack_auto_reconnect ~= nil then
+    M.current.auto_reconnect = vim.g.neo_slack_auto_reconnect == 1
+  end
+  
+  -- 再接続間隔
+  if vim.g.neo_slack_reconnect_interval then
+    M.current.reconnect_interval = vim.g.neo_slack_reconnect_interval
+  end
+  
+  -- デフォルトチャンネルの自動表示
+  if vim.g.neo_slack_auto_open_default_channel ~= nil then
+    M.current.auto_open_default_channel = vim.g.neo_slack_auto_open_default_channel == 1
+  end
+  
   -- キーマッピング
   if vim.g.neo_slack_keymaps then
     M.current.keymaps = vim.tbl_deep_extend('force', M.current.keymaps, vim.g.neo_slack_keymaps)
@@ -96,6 +123,11 @@ function M.load_from_vim_globals()
   -- レイアウト
   if vim.g.neo_slack_layout then
     M.current.layout = vim.tbl_deep_extend('force', M.current.layout, vim.g.neo_slack_layout)
+  end
+  
+  -- 初期化設定
+  if vim.g.neo_slack_initialization then
+    M.current.initialization = vim.tbl_deep_extend('force', M.current.initialization, vim.g.neo_slack_initialization)
   end
 end
 

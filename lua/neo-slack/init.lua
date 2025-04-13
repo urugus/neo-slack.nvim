@@ -7,6 +7,7 @@
 local core = require('neo-slack.core')
 local events = require('neo-slack.core.events')
 local config = require('neo-slack.core.config')
+local initialization = require('neo-slack.core.initialization')
 
 -- 機能モジュール
 local api = require('neo-slack.api')
@@ -36,63 +37,41 @@ end
 
 --- プラグインの初期化
 --- @param opts table|nil 設定オプション
---- @return boolean 初期化に成功したかどうか
-function M.setup(opts)
+--- @param callback function|nil 初期化完了時のコールバック
+--- @return boolean 初期化プロセスが開始されたかどうか
+function M.setup(opts, callback)
   -- 設定の初期化
   config.setup(opts)
   
-  -- トークンの取得を試みる（優先順位: 1.設定パラメータ 2.保存済みトークン 3.ユーザー入力）
-  if config.get('token') == '' then
-    -- ストレージからトークンを読み込み
-    local saved_token = storage.load_token()
-    
-    if saved_token then
-      config.set('token', saved_token)
-      notify('保存されたトークンを読み込みました', vim.log.levels.INFO)
+  -- 初期化プロセスを開始
+  initialization.start(function(success)
+    if success then
+      notify('初期化が完了しました', vim.log.levels.INFO)
+      
+      -- デフォルトチャンネルを表示
+      if config.get('auto_open_default_channel', true) then
+        local default_channel = config.get('default_channel')
+        if default_channel and default_channel ~= '' then
+          M.list_channels()
+        end
+      end
     else
-      -- トークンの入力を求める
-      notify('Slackトークンが必要です', vim.log.levels.INFO)
-      M.prompt_for_token()
-      return false -- プロンプト後に再度setup()が呼ばれるため、ここで終了
+      notify('初期化に失敗しました。詳細はログを確認してください。', vim.log.levels.ERROR)
     end
-  end
-  
-  -- APIクライアントの初期化
-  api.setup(config.get('token'))
-  
-  -- 通知システムの初期化
-  if config.get('notification') then
-    notification.setup(config.get('refresh_interval'))
-  end
-  
-  -- スター付きチャンネルの情報を読み込み
-  local starred_channels = storage.load_starred_channels()
-  state.set_starred_channels(starred_channels)
-  
-  -- カスタムセクションの情報を読み込み
-  local custom_sections = storage.load_custom_sections()
-  state.custom_sections = custom_sections
-  
-  -- チャンネルとセクションの関連付けを読み込み
-  local channel_section_map = storage.load_channel_section_map()
-  state.channel_section_map = channel_section_map
-  
-  -- セクションの折りたたみ状態を初期化
-  state.init_section_collapsed()
-  
-  -- 状態を初期化済みに設定
-  state.set_initialized(true)
-  
-  -- イベントハンドラの登録
-  M.register_event_handlers()
-  
-  notify('初期化完了', vim.log.levels.INFO)
-  
-  if config.get('debug') then
-    notify('デバッグモードが有効です', vim.log.levels.INFO)
-  end
+    
+    -- コールバックを呼び出し
+    if callback then
+      callback(success)
+    end
+  end)
   
   return true
+end
+
+--- 初期化状態を取得
+--- @return table 初期化状態
+function M.get_initialization_status()
+  return initialization.get_status()
 end
 
 --- イベントハンドラを登録
@@ -126,7 +105,16 @@ function M.register_event_handlers()
   events.on('file_uploaded', function(channel, file_path)
     M.upload_file(channel, file_path)
   end)
-end
+  
+  -- 再接続イベント
+  events.on('reconnected', function()
+    -- 現在のチャンネルのメッセージを更新
+    local channel_id = state.get_current_channel()
+    if channel_id then
+      M.list_messages(channel_id)
+    end
+  end)
+}
 
 --- Slackの接続状態を表示
 --- @return nil
@@ -134,6 +122,20 @@ function M.status()
   api.test_connection(function(success, data)
     if success then
       notify('接続成功 - ワークスペース: ' .. (data.team or 'Unknown'), vim.log.levels.INFO)
+      
+      -- 初期化状態を表示
+      local init_status = initialization.get_status()
+      local status_str = '初期化状態: '
+      
+      if init_status.is_initialized then
+        status_str = status_str .. '完了'
+      elseif init_status.is_initializing then
+        status_str = status_str .. string.format('進行中 (%d/%d)', init_status.current_step, init_status.total_steps)
+      else
+        status_str = status_str .. '未初期化'
+      end
+      
+      notify(status_str, vim.log.levels.INFO)
     else
       notify('接続失敗 - ' .. (data.error or 'Unknown error'), vim.log.levels.ERROR)
     end
@@ -145,8 +147,9 @@ end
 --------------------------------------------------
 
 --- トークン入力を促す
+--- @param callback function|nil トークン入力後のコールバック
 --- @return nil
-function M.prompt_for_token()
+function M.prompt_for_token(callback)
   vim.ui.input({
     prompt = 'Slack APIトークンを入力してください: ',
     default = '',
@@ -157,18 +160,22 @@ function M.prompt_for_token()
   }, function(input)
     if not input or input == '' then
       notify('トークンが入力されませんでした。プラグインは初期化されません。', vim.log.levels.WARN)
+      if callback then
+        callback(false)
+      end
       return
     end
     
     -- トークンの検証
-    M.validate_and_save_token(input)
+    M.validate_and_save_token(input, callback)
   end)
 end
 
 --- トークンを検証して保存
 --- @param token string Slack APIトークン
+--- @param callback function|nil 検証後のコールバック
 --- @return nil
-function M.validate_and_save_token(token)
+function M.validate_and_save_token(token, callback)
   -- 一時的にトークンを設定してテスト
   api.setup(token)
   api.test_connection(function(success, data)
@@ -179,15 +186,24 @@ function M.validate_and_save_token(token)
         
         -- 設定を更新して初期化を続行
         config.set('token', token)
-        M.setup(config.get())
+        
+        -- 初期化を再開
+        initialization.start(function(init_success)
+          if callback then
+            callback(init_success)
+          end
+        end)
       else
         notify('トークンの保存に失敗しました', vim.log.levels.ERROR)
+        if callback then
+          callback(false)
+        end
       end
     else
       notify('無効なトークンです - ' .. (data.error or 'Unknown error'), vim.log.levels.ERROR)
       -- 再度入力を促す
       vim.defer_fn(function()
-        M.prompt_for_token()
+        M.prompt_for_token(callback)
       end, 1000)
     end
   end)
@@ -492,8 +508,38 @@ function M.upload_file(channel, file_path)
   end
 end
 
+--------------------------------------------------
+-- プラグイン終了処理
+--------------------------------------------------
+
+--- プラグインの終了処理
+--- @return nil
+function M.shutdown()
+  -- 再接続タイマーを停止
+  initialization.stop_reconnect_timer()
+  
+  -- 通知システムを停止
+  if config.get('notification') then
+    notification.stop()
+  end
+  
+  -- 終了イベントを発行
+  events.emit('shutdown')
+  
+  notify('プラグインを終了しました', vim.log.levels.INFO)
+end
+
 -- コアモジュールをエクスポート
 M.core = core
 M.events = events
+M.initialization = initialization
+
+-- Neovimの終了時にプラグインの終了処理を実行
+vim.api.nvim_create_autocmd('VimLeavePre', {
+  pattern = '*',
+  callback = function()
+    M.shutdown()
+  end
+})
 
 return M
