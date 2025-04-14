@@ -422,15 +422,15 @@ end
 M.Promise.__index = M.Promise
 
 -- メソッドを直接テーブルに追加
-M.Promise.then = function(self, ...)
+M.Promise["then"] = function(self, ...)
   return M.Promise.then_func(self, ...)
 end
 
-M.Promise.catch = function(self, ...)
+M.Promise["catch"] = function(self, ...)
   return M.Promise.catch_func(self, ...)
 end
 
-M.Promise.finally = function(self, ...)
+M.Promise["finally"] = function(self, ...)
   return M.Promise.finally_func(self, ...)
 end
 
