@@ -339,11 +339,12 @@ function M.Promise.new(executor)
   return self
 end
 
--- thenメソッド
+-- thenメソッド（通常の関数として定義）
+---@param self table Promise
 ---@param on_fulfilled function|nil 成功時のコールバック
 ---@param on_rejected function|nil 失敗時のコールバック
 ---@return table Promise
-function M.Promise:then(on_fulfilled, on_rejected)
+function M.Promise.then_func(self, on_fulfilled, on_rejected)
   local promise = M.Promise.new(function(resolve, reject)
     if on_fulfilled and type(on_fulfilled) == 'function' then
       table.insert(self._on_fulfilled, function(value)
@@ -400,19 +401,40 @@ function M.Promise:then(on_fulfilled, on_rejected)
   return promise
 end
 
--- catchメソッド
+-- catchメソッド（通常の関数として定義）
+---@param self table Promise
 ---@param on_rejected function 失敗時のコールバック
 ---@return table Promise
-function M.Promise:catch(on_rejected)
-  return self:then(nil, on_rejected)
+function M.Promise.catch_func(self, on_rejected)
+  return M.Promise.then_func(self, nil, on_rejected)
 end
 
--- finallyメソッド
+-- finallyメソッド（通常の関数として定義）
+---@param self table Promise
 ---@param on_finally function 最終処理のコールバック
 ---@return table Promise
-function M.Promise:finally(on_finally)
+function M.Promise.finally_func(self, on_finally)
   table.insert(self._on_finally, on_finally)
   return self
+end
+
+-- メタメソッドを使用して、オブジェクト指向の構文をサポート
+M.Promise.__index = function(tbl, key)
+  if key == "then" then
+    return function(self, ...)
+      return M.Promise.then_func(self, ...)
+    end
+  elseif key == "catch" then
+    return function(self, ...)
+      return M.Promise.catch_func(self, ...)
+    end
+  elseif key == "finally" then
+    return function(self, ...)
+      return M.Promise.finally_func(self, ...)
+    end
+  else
+    return M.Promise[key]
+  end
 end
 
 -- 複数のPromiseが完了するのを待つ
@@ -429,7 +451,8 @@ function M.Promise.all(promises)
     local completed = 0
     
     for i, promise in ipairs(promises) do
-      promise:then(
+      -- 直接関数を呼び出す
+      M.Promise.then_func(promise,
         function(value)
           results[i] = value
           completed = completed + 1
@@ -459,7 +482,8 @@ function M.Promise.timeout(promise, timeout)
       reject('Timeout after ' .. timeout .. 'ms')
     end)
     
-    promise:then(
+    -- 直接関数を呼び出す
+    M.Promise.then_func(promise,
       function(value)
         if timer then
           timer:stop()
