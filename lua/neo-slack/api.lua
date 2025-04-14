@@ -152,17 +152,21 @@ end
 --- @param callback function コールバック関数
 --- @return nil
 function M.request(method, endpoint, params, callback)
-  M.request_promise(method, endpoint, params)
-    :then(function(data)
-      vim.schedule(function()
-        callback(true, data)
-      end)
+  local promise = M.request_promise(method, endpoint, params)
+  
+  -- thenメソッドをメソッド構文で呼び出す
+  promise:then(function(data)
+    vim.schedule(function()
+      callback(true, data)
     end)
-    :catch(function(err)
-      vim.schedule(function()
-        callback(false, err)
-      end)
+  end)
+  
+  -- catchメソッドをメソッド構文で呼び出す
+  promise:catch(function(err)
+    vim.schedule(function()
+      callback(false, err)
     end)
+  end)
 end
 
 --------------------------------------------------
@@ -172,39 +176,44 @@ end
 --- 接続テスト（Promise版）
 --- @return table Promise
 function M.test_connection_promise()
-  return M.request_promise('GET', 'auth.test', {})
-    :then(function(data)
-      -- チーム情報を保存
-      M.config.team_info = data
-      
-      -- 接続成功イベントを発行
-      events.emit('api:connected', data)
-      
-      return data
-    end)
-    :catch(function(err)
-      -- 接続失敗イベントを発行
-      events.emit('api:connection_failed', err)
-      
-      return utils.Promise.reject(err)
-    end)
+  local promise = M.request_promise('GET', 'auth.test', {})
+  
+  -- thenメソッドをメソッド構文で呼び出す
+  return promise:then(function(data)
+    -- チーム情報を保存
+    M.config.team_info = data
+    
+    -- 接続成功イベントを発行
+    events.emit('api:connected', data)
+    
+    return data
+  end):catch(function(err)
+    -- 接続失敗イベントを発行
+    events.emit('api:connection_failed', err)
+    
+    return utils.Promise.reject(err)
+  end)
 end
 
 --- 接続テスト（コールバック版 - 後方互換性のため）
 --- @param callback function コールバック関数
 --- @return nil
 function M.test_connection(callback)
-  M.test_connection_promise()
-    :then(function(data)
-      vim.schedule(function()
-        callback(true, data)
-      end)
+  local promise = M.test_connection_promise()
+  
+  -- thenメソッドをメソッド構文で呼び出す
+  promise:then(function(data)
+    vim.schedule(function()
+      callback(true, data)
     end)
-    :catch(function(err)
-      vim.schedule(function()
-        callback(false, err)
-      end)
+  end)
+  
+  -- catchメソッドをメソッド構文で呼び出す
+  promise:catch(function(err)
+    vim.schedule(function()
+      callback(false, err)
     end)
+  end)
 end
 
 --- チーム情報を取得（Promise版）
@@ -217,49 +226,59 @@ end
 --- @param callback function コールバック関数
 --- @return nil
 function M.get_team_info(callback)
-  M.get_team_info_promise()
-    :then(function(data)
-      vim.schedule(function()
-        callback(true, data)
-      end)
+  local promise = M.get_team_info_promise()
+  
+  -- thenメソッドをメソッド構文で呼び出す
+  promise:then(function(data)
+    vim.schedule(function()
+      callback(true, data)
     end)
-    :catch(function(err)
-      vim.schedule(function()
-        callback(false, err)
-      end)
+  end)
+  
+  -- catchメソッドをメソッド構文で呼び出す
+  promise:catch(function(err)
+    vim.schedule(function()
+      callback(false, err)
     end)
+  end)
 end
 
 --- ユーザー情報を取得（Promise版）
 --- @return table Promise
 function M.get_user_info_promise()
-  return M.request_promise('GET', 'users.identity', {})
-    :then(function(data)
-      -- ユーザー情報を保存
-      M.config.user_info = data
-      
-      -- ユーザー情報取得イベントを発行
-      events.emit('api:user_info_loaded', data)
-      
-      return data
-    end)
+  local promise = M.request_promise('GET', 'users.identity', {})
+  
+  -- thenメソッドをメソッド構文で呼び出す
+  return promise:then(function(data)
+    -- ユーザー情報を保存
+    M.config.user_info = data
+    
+    -- ユーザー情報取得イベントを発行
+    events.emit('api:user_info_loaded', data)
+    
+    return data
+  end)
 end
 
 --- ユーザー情報を取得（コールバック版 - 後方互換性のため）
 --- @param callback function コールバック関数
 --- @return nil
 function M.get_user_info(callback)
-  M.get_user_info_promise()
-    :then(function(data)
-      vim.schedule(function()
-        callback(true, data)
-      end)
+  local promise = M.get_user_info_promise()
+  
+  -- thenメソッドをメソッド構文で呼び出す
+  promise:then(function(data)
+    vim.schedule(function()
+      callback(true, data)
     end)
-    :catch(function(err)
-      vim.schedule(function()
-        callback(false, err)
-      end)
+  end)
+  
+  -- catchメソッドをメソッド構文で呼び出す
+  promise:catch(function(err)
+    vim.schedule(function()
+      callback(false, err)
     end)
+  end)
 end
 
 --- 特定のユーザーIDからユーザー情報を取得（Promise版）
@@ -278,21 +297,22 @@ function M.get_user_info_by_id_promise(user_id)
     user = user_id
   }
   
-  return M.request_promise('GET', 'users.info', params)
-    :then(function(data)
-      -- キャッシュに保存
-      M.users_cache[user_id] = data.user
-      
-      -- ユーザー情報取得イベントを発行
-      events.emit('api:user_info_by_id_loaded', user_id, data.user)
-      
-      return data.user
-    end)
-    :catch(function(err)
-      local error_msg = err.error or 'Unknown error'
-      notify('ユーザー情報の取得に失敗しました - ' .. error_msg, vim.log.levels.WARN)
-      return utils.Promise.reject(err)
-    end)
+  local promise = M.request_promise('GET', 'users.info', params)
+  
+  -- thenメソッドをメソッド構文で呼び出す
+  return promise:then(function(data)
+    -- キャッシュに保存
+    M.users_cache[user_id] = data.user
+    
+    -- ユーザー情報取得イベントを発行
+    events.emit('api:user_info_by_id_loaded', user_id, data.user)
+    
+    return data.user
+  end):catch(function(err)
+    local error_msg = err.error or 'Unknown error'
+    notify('ユーザー情報の取得に失敗しました - ' .. error_msg, vim.log.levels.WARN)
+    return utils.Promise.reject(err)
+  end)
 end
 
 --- 特定のユーザーIDからユーザー情報を取得（コールバック版 - 後方互換性のため）
@@ -300,37 +320,42 @@ end
 --- @param callback function コールバック関数
 --- @return nil
 function M.get_user_info_by_id(user_id, callback)
-  M.get_user_info_by_id_promise(user_id)
-    :then(function(user)
-      vim.schedule(function()
-        callback(true, user)
-      end)
+  local promise = M.get_user_info_by_id_promise(user_id)
+  
+  -- thenメソッドをメソッド構文で呼び出す
+  promise:then(function(user)
+    vim.schedule(function()
+      callback(true, user)
     end)
-    :catch(function(err)
-      vim.schedule(function()
-        callback(false, err)
-      end)
+  end)
+  
+  -- catchメソッドをメソッド構文で呼び出す
+  promise:catch(function(err)
+    vim.schedule(function()
+      callback(false, err)
     end)
+  end)
 end
 
 --- ユーザーIDからユーザー名を取得（Promise版）
 --- @param user_id string ユーザーID
 --- @return table Promise
 function M.get_username_promise(user_id)
-  return M.get_user_info_by_id_promise(user_id)
-    :then(function(user_data)
-      local display_name = user_data.profile.display_name
-      local real_name = user_data.profile.real_name
-      
-      -- display_nameが空の場合はreal_nameを使用
-      local username = (display_name and display_name ~= '') and display_name or real_name
-      
-      return username
-    end)
-    :catch(function()
-      -- 失敗した場合はユーザーIDをそのまま返す
-      return user_id
-    end)
+  local promise = M.get_user_info_by_id_promise(user_id)
+  
+  -- thenメソッドをメソッド構文で呼び出す
+  return promise:then(function(user_data)
+    local display_name = user_data.profile.display_name
+    local real_name = user_data.profile.real_name
+    
+    -- display_nameが空の場合はreal_nameを使用
+    local username = (display_name and display_name ~= '') and display_name or real_name
+    
+    return username
+  end):catch(function()
+    -- 失敗した場合はユーザーIDをそのまま返す
+    return user_id
+  end)
 end
 
 --- ユーザーIDからユーザー名を取得（コールバック版 - 後方互換性のため）
@@ -338,21 +363,104 @@ end
 --- @param callback function コールバック関数
 --- @return nil
 function M.get_username(user_id, callback)
-  M.get_username_promise(user_id)
-    :then(function(username)
-      vim.schedule(function()
-        callback(username)
-      end)
+  local promise = M.get_username_promise(user_id)
+  
+  -- thenメソッドをメソッド構文で呼び出す
+  promise:then(function(username)
+    vim.schedule(function()
+      callback(username)
     end)
+  end)
 end
 
 --------------------------------------------------
 -- チャンネル関連の関数
 --------------------------------------------------
 
--- チャンネル一覧を取得する関数は前半で既に定義されているため削除
+--- チャンネル一覧を取得（Promise版）
+--- @return table Promise
+function M.get_channels_promise()
+  local params = {
+    types = "public_channel,private_channel,mpim,im",
+    exclude_archived = true,
+    limit = 1000
+  }
+  
+  return M.request_promise('GET', 'conversations.list', params)
+    :then(function(data)
+      -- チャンネル一覧取得イベントを発行
+      events.emit('api:channels_loaded', data.channels)
+      
+      return data.channels
+    end)
+    :catch(function(err)
+      local error_msg = err.error or 'Unknown error'
+      notify('チャンネル一覧の取得に失敗しました - ' .. error_msg, vim.log.levels.ERROR)
+      return utils.Promise.reject(err)
+    end)
+end
+
+--- チャンネル一覧を取得（コールバック版 - 後方互換性のため）
+--- @param callback function コールバック関数
+--- @return nil
+function M.get_channels(callback)
+  local promise = M.get_channels_promise()
+  
+  -- thenメソッドをメソッド構文で呼び出す
+  promise:then(function(channels)
+    vim.schedule(function()
+      callback(true, channels)
+    end)
+  end)
+  
+  -- catchメソッドをメソッド構文で呼び出す
+  promise:catch(function(err)
+    vim.schedule(function()
+      callback(false, err)
+    end)
+  end)
+end
 
 --- チャンネル名からチャンネルIDを取得
+--- @param channel_name string チャンネル名
+--- @param callback function コールバック関数
+--- @return nil
+--- チャンネル名からチャンネルIDを取得（Promise版）
+--- @param channel_name string チャンネル名
+--- @return table Promise
+function M.get_channel_id_promise(channel_name)
+  -- すでにIDの場合はそのまま返す
+  if channel_name:match('^[A-Z0-9]+$') then
+    return utils.Promise.new(function(resolve)
+      resolve(channel_name)
+    end)
+  end
+  
+  -- チャンネル一覧を取得するPromiseを作成
+  return utils.Promise.new(function(resolve, reject)
+    -- チャンネル一覧から検索
+    M.get_channels(function(success, channels)
+      if not success then
+        notify('チャンネル一覧の取得に失敗したため、チャンネルIDを特定できません', vim.log.levels.ERROR)
+        reject({ error = 'チャンネル一覧の取得に失敗しました' })
+        return
+      end
+      
+      -- チャンネル名からIDを検索
+      for _, channel in ipairs(channels) do
+        if channel.name == channel_name then
+          resolve(channel.id)
+          return
+        end
+      end
+      
+      notify('チャンネル "' .. channel_name .. '" が見つかりません', vim.log.levels.ERROR)
+      reject({ error = 'チャンネルが見つかりません: ' .. channel_name })
+    end)
+  end)
+end
+
+--- チャンネル名からチャンネルIDを取得（コールバック版 - 後方互換性のため）
 --- @param channel_name string チャンネル名
 --- @param callback function コールバック関数
 --- @return nil
@@ -360,13 +468,6 @@ function M.get_channel_id(channel_name, callback)
   -- すでにIDの場合はそのまま返す
   if channel_name:match('^[A-Z0-9]+$') then
     callback(channel_name)
-    return
-  end
-  
-  -- 状態からチャンネルIDを取得
-  local channel_id = state.get_channel_id_by_name(channel_name)
-  if channel_id then
-    callback(channel_id)
     return
   end
   
@@ -378,9 +479,7 @@ function M.get_channel_id(channel_name, callback)
       return
     end
     
-    -- 状態にチャンネル一覧を保存
-    state.set_channels(channels)
-    
+    -- チャンネル名からIDを検索
     for _, channel in ipairs(channels) do
       if channel.name == channel_name then
         callback(channel.id)
@@ -397,7 +496,58 @@ end
 -- メッセージ関連の関数
 --------------------------------------------------
 
--- メッセージ一覧を取得する関数は前半で既に定義されているため削除
+--- メッセージ一覧を取得（Promise版）
+--- @param channel string チャンネル名またはID
+--- @param options table|nil 追加オプション
+--- @return table Promise
+function M.get_messages_promise(channel, options)
+  options = options or {}
+  
+  -- チャンネルIDを取得
+  return M.get_channel_id_promise(channel)
+    :then(function(channel_id)
+      local params = vim.tbl_extend('force', {
+        channel = channel_id,
+        limit = 100,
+      }, options)
+      
+      return M.request_promise('GET', 'conversations.history', params)
+        :then(function(data)
+          -- メッセージ一覧取得イベントを発行
+          events.emit('api:messages_loaded', channel_id, data.messages)
+          
+          return data.messages
+        end)
+    end)
+    :catch(function(err)
+      local error_msg = err.error or 'Unknown error'
+      notify('メッセージの取得に失敗しました - ' .. error_msg, vim.log.levels.ERROR)
+      return utils.Promise.reject(err)
+    end)
+end
+
+--- メッセージ一覧を取得（コールバック版 - 後方互換性のため）
+--- @param channel string チャンネル名またはID
+--- @param callback function コールバック関数
+--- @param options table|nil 追加オプション
+--- @return nil
+function M.get_messages(channel, callback, options)
+  local promise = M.get_messages_promise(channel, options)
+  
+  -- thenメソッドをメソッド構文で呼び出す
+  promise:then(function(messages)
+    vim.schedule(function()
+      callback(true, messages)
+    end)
+  end)
+  
+  -- catchメソッドをメソッド構文で呼び出す
+  promise:catch(function(err)
+    vim.schedule(function()
+      callback(false, err)
+    end)
+  end)
+end
 
 --- スレッド返信を取得（Promise版）
 --- @param channel string チャンネル名またはID
@@ -464,17 +614,21 @@ end
 --- @param callback function コールバック関数
 --- @return nil
 function M.get_thread_replies(channel, thread_ts, callback)
-  M.get_thread_replies_promise(channel, thread_ts)
-    :then(function(result)
-      vim.schedule(function()
-        callback(true, result.replies, result.parent_message)
-      end)
+  local promise = M.get_thread_replies_promise(channel, thread_ts)
+  
+  -- thenメソッドをメソッド構文で呼び出す
+  promise:then(function(result)
+    vim.schedule(function()
+      callback(true, result.replies, result.parent_message)
     end)
-    :catch(function(err)
-      vim.schedule(function()
-        callback(false, err)
-      end)
+  end)
+  
+  -- catchメソッドをメソッド構文で呼び出す
+  promise:catch(function(err)
+    vim.schedule(function()
+      callback(false, err)
     end)
+  end)
 end
 
 --- メッセージを送信（Promise版）
