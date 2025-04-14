@@ -10,7 +10,7 @@ local config = require('neo-slack.core.config')
 local initialization = require('neo-slack.core.initialization')
 
 -- 機能モジュール
-local api = require('neo-slack.api')
+local api = require('neo-slack.api.init')
 local storage = require('neo-slack.storage')
 local utils = require('neo-slack.utils')
 local notification = require('neo-slack.notification')
@@ -502,39 +502,5 @@ function M.upload_file(channel, file_path)
     do_upload(file_path)
   end
 end
-
---------------------------------------------------
--- プラグイン終了処理
---------------------------------------------------
-
---- プラグインの終了処理
---- @return nil
-function M.shutdown()
-  -- 再接続タイマーを停止
-  initialization.stop_reconnect_timer()
-  
-  -- 通知システムを停止
-  if config.get('notification') then
-    notification.stop()
-  end
-  
-  -- 終了イベントを発行
-  events.emit('shutdown')
-  
-  notify('プラグインを終了しました', vim.log.levels.INFO)
-end
-
--- コアモジュールをエクスポート
-M.core = core
-M.events = events
-M.initialization = initialization
-
--- Neovimの終了時にプラグインの終了処理を実行
-vim.api.nvim_create_autocmd('VimLeavePre', {
-  pattern = '*',
-  callback = function()
-    M.shutdown()
-  end
-})
 
 return M
