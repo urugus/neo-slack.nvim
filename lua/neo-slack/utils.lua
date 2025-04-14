@@ -419,7 +419,15 @@ function M.Promise.finally_func(self, on_finally)
 end
 
 -- メタメソッドを使用して、オブジェクト指向の構文をサポート
-M.Promise.__index = M.Promise
+-- 予約語（then, catch, finally）をメソッド名として使用できるようにカスタム__indexメタメソッドを定義
+M.Promise.__index = function(tbl, key)
+  -- 予約語の場合は角括弧構文で取得
+  if key == "then" or key == "catch" or key == "finally" then
+    return M.Promise[key]
+  end
+  -- 通常のキーはそのまま
+  return M.Promise[key]
+end
 
 -- メソッドを直接テーブルに追加
 M.Promise["then"] = function(self, ...)
