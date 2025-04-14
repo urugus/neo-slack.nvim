@@ -419,22 +419,19 @@ function M.Promise.finally_func(self, on_finally)
 end
 
 -- メタメソッドを使用して、オブジェクト指向の構文をサポート
-M.Promise.__index = function(tbl, key)
-  if key == "then" then
-    return function(self, ...)
-      return M.Promise.then_func(self, ...)
-    end
-  elseif key == "catch" then
-    return function(self, ...)
-      return M.Promise.catch_func(self, ...)
-    end
-  elseif key == "finally" then
-    return function(self, ...)
-      return M.Promise.finally_func(self, ...)
-    end
-  else
-    return M.Promise[key]
-  end
+M.Promise.__index = M.Promise
+
+-- メソッドを直接テーブルに追加
+M.Promise.then = function(self, ...)
+  return M.Promise.then_func(self, ...)
+end
+
+M.Promise.catch = function(self, ...)
+  return M.Promise.catch_func(self, ...)
+end
+
+M.Promise.finally = function(self, ...)
+  return M.Promise.finally_func(self, ...)
 end
 
 -- 複数のPromiseが完了するのを待つ
