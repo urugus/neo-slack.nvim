@@ -152,17 +152,59 @@ end
 --- @param callback function コールバック関数
 --- @return nil
 function M.request(method, endpoint, params, callback)
-  M.request_promise(method, endpoint, params)
-    :then(function(data)
+  -- Promiseを使わずに直接実装
+  local headers = {
+    Authorization = 'Bearer ' .. M.config.token,
+  }
+  
+  local url = M.config.base_url .. endpoint
+  
+  local opts = {
+    headers = headers,
+    callback = function(response)
+      if response.status ~= 200 then
+        vim.schedule(function()
+          callback(false, { error = 'HTTP error: ' .. response.status, status = response.status })
+        end)
+        return
+      end
+      
+      local success, data = pcall(json.decode, response.body)
+      if not success then
+        vim.schedule(function()
+          callback(false, { error = 'JSON parse error: ' .. data })
+        end)
+        return
+      end
+      
+      if not data.ok then
+        vim.schedule(function()
+          callback(false, { error = data.error or 'Unknown API error', data = data })
+        end)
+        return
+      end
+      
       vim.schedule(function()
         callback(true, data)
       end)
+    end
+  }
+  
+  if method == 'GET' then
+    -- GETリクエストの場合、パラメータをURLクエリパラメータとして送信
+    -- ブール値を文字列に変換（plenary.curlはブール値を処理できない）
+    local string_params = convert_bool_to_string(params or {})
+    curl.get(url, vim.tbl_extend('force', opts, { query = string_params }))
+  elseif method == 'POST' then
+    -- POSTリクエストの場合、パラメータをJSONボディとして送信
+    opts.headers['Content-Type'] = 'application/json; charset=utf-8'
+    opts.body = json.encode(params or {})
+    curl.post(url, opts)
+  else
+    vim.schedule(function()
+      callback(false, { error = 'Unsupported HTTP method: ' .. method })
     end)
-    :catch(function(err)
-      vim.schedule(function()
-        callback(false, err)
-      end)
-    end)
+  end
 end
 
 --------------------------------------------------
@@ -172,22 +214,26 @@ end
 --- 接続テスト（Promise版）
 --- @return table Promise
 function M.test_connection_promise()
-  return M.request_promise('GET', 'auth.test', {})
-    :then(function(data)
-      -- チーム情報を保存
-      M.config.team_info = data
-      
-      -- 接続成功イベントを発行
-      events.emit('api:connected', data)
-      
-      return data
-    end)
-    :catch(function(err)
-      -- 接続失敗イベントを発行
-      events.emit('api:connection_failed', err)
-      
-      return utils.Promise.reject(err)
-    end)
+  local promise = M.request_promise('GET', 'auth.test', {})
+  
+  -- thenメソッドを使用
+  local promise_with_then = promise["then"](promise, function(data)
+    -- チーム情報を保存
+    M.config.team_info = data
+    
+    -- 接続成功イベントを発行
+    events.emit('api:connected', data)
+    
+    return data
+  end)
+  
+  -- catchメソッドを使用
+  return promise_with_then["catch"](promise_with_then, function(err)
+    -- 接続失敗イベントを発行
+    events.emit('api:connection_failed', err)
+    
+    return utils.Promise.reject(err)
+  end)
 end
 
 --- 接続テスト（コールバック版 - 後方互換性のため）
@@ -350,47 +396,97 @@ end
 -- チャンネル関連の関数
 --------------------------------------------------
 
--- チャンネル一覧を取得する関数は前半で既に定義されているため削除
+--- チャンネル一覧を取得（Promise版）
+--- @return table Promise
+function M.get_channels_promise()
+  local params = {
+    types = 'public_channel,private_channel,mpim,im',
+    exclude_archived = true,
+    limit = 1000
+  }
+  
+  return M.request_promise('GET', 'conversations.list', params)
+    :then(function(data)
+      -- チャンネル一覧取得イベントを発行
+      events.emit('api:channels_loaded', data.channels)
+      
+      return data.channels
+    end)
+    :catch(function(err)
+      local error_msg = err.error or 'Unknown error'
+      notify('チャンネル一覧の取得に失敗しました - ' .. error_msg, vim.log.levels.ERROR)
+      return utils.Promise.reject(err)
+    end)
+end
 
---- チャンネル名からチャンネルIDを取得
+--- チャンネル一覧を取得（コールバック版 - 後方互換性のため）
+--- @param callback function コールバック関数
+--- @return nil
+function M.get_channels(callback)
+  M.get_channels_promise()
+    :then(function(channels)
+      vim.schedule(function()
+        callback(true, channels)
+      end)
+    end)
+    :catch(function(err)
+      vim.schedule(function()
+        callback(false, err)
+      end)
+    end)
+end
+
+--- チャンネル名からチャンネルIDを取得（Promise版）
+--- @param channel_name string チャンネル名
+--- @return table Promise
+function M.get_channel_id_promise(channel_name)
+  -- すでにIDの場合はそのまま返す
+  if channel_name:match('^[A-Z0-9]+$') then
+    return utils.Promise.new(function(resolve)
+      resolve(channel_name)
+    end)
+  end
+  
+  -- イベントを発行してチャンネルIDを取得
+  return utils.Promise.new(function(resolve, reject)
+    -- チャンネル一覧を取得
+    M.get_channels_promise()
+      :then(function(channels)
+        for _, channel in ipairs(channels) do
+          if channel.name == channel_name then
+            -- チャンネルIDを発見
+            resolve(channel.id)
+            return
+          end
+        end
+        
+        -- チャンネルが見つからない場合
+        notify('チャンネル "' .. channel_name .. '" が見つかりません', vim.log.levels.ERROR)
+        reject({ error = 'チャンネルが見つかりません: ' .. channel_name })
+      end)
+      :catch(function(err)
+        notify('チャンネル一覧の取得に失敗したため、チャンネルIDを特定できません', vim.log.levels.ERROR)
+        reject(err)
+      end)
+  end)
+end
+
+--- チャンネル名からチャンネルIDを取得（コールバック版 - 後方互換性のため）
 --- @param channel_name string チャンネル名
 --- @param callback function コールバック関数
 --- @return nil
 function M.get_channel_id(channel_name, callback)
-  -- すでにIDの場合はそのまま返す
-  if channel_name:match('^[A-Z0-9]+$') then
-    callback(channel_name)
-    return
-  end
-  
-  -- 状態からチャンネルIDを取得
-  local channel_id = state.get_channel_id_by_name(channel_name)
-  if channel_id then
-    callback(channel_id)
-    return
-  end
-  
-  -- チャンネル一覧から検索
-  M.get_channels(function(success, channels)
-    if not success then
-      notify('チャンネル一覧の取得に失敗したため、チャンネルIDを特定できません', vim.log.levels.ERROR)
-      callback(nil)
-      return
-    end
-    
-    -- 状態にチャンネル一覧を保存
-    state.set_channels(channels)
-    
-    for _, channel in ipairs(channels) do
-      if channel.name == channel_name then
-        callback(channel.id)
-        return
-      end
-    end
-    
-    notify('チャンネル "' .. channel_name .. '" が見つかりません', vim.log.levels.ERROR)
-    callback(nil)
-  end)
+  M.get_channel_id_promise(channel_name)
+    :then(function(channel_id)
+      vim.schedule(function()
+        callback(channel_id)
+      end)
+    end)
+    :catch(function()
+      vim.schedule(function()
+        callback(nil)
+      end)
+    end)
 end
 
 --------------------------------------------------
