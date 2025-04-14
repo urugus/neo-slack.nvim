@@ -3,7 +3,7 @@
 --- 新しいメッセージやメンションの通知を処理します
 ---@brief ]]
 
-local api = require('neo-slack.api')
+local api = require('neo-slack.api.init')
 local utils = require('neo-slack.utils')
 
 ---@class NeoSlackNotification

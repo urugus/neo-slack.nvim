@@ -221,7 +221,7 @@ function M.run_next_step(callback)
     
   elseif step.name == 'api' then
     -- APIクライアントの初期化
-    local api = require('neo-slack.api')
+    local api = require('neo-slack.api.init')
     local token = config.get('token')
     
     api.setup(token)
@@ -365,7 +365,7 @@ function M.setup_reconnect_timer()
       return
     end
     
-    local api = require('neo-slack.api')
+    local api = require('neo-slack.api.init')
     api.test_connection(function(success, data)
       if success then
         debug_log('接続は正常です - ワークスペース: ' .. (data.team or 'Unknown'))
