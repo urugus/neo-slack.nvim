@@ -1,5 +1,8 @@
 -- Luacheck設定ファイル
 
+-- Lua標準ライブラリの設定
+std = "lua51"  -- Neovimは基本的にLua 5.1互換
+
 -- グローバル変数の定義
 globals = {
   "vim",
@@ -16,6 +19,7 @@ read_globals = {
   "vim.lsp",
   "vim.diagnostic",
   "vim.keymap",
+  "vim.json",
 }
 
 -- 無視するファイルパターン
@@ -27,6 +31,7 @@ exclude_files = {
 ignore = {
   "212", -- 未使用の引数
   "213", -- 未使用の変数
+  "E011", -- expected identifier near 'then'（Promise構文のため）
 }
 
 -- 最大行長
@@ -37,3 +42,10 @@ max_string_line_length = 120
 
 -- 最大コメント行長
 max_comment_line_length = 120
+
+-- 構文エラーを無視する設定
+files = {
+  ["lua/neo-slack/api.lua"] = {
+    ignore = { "E011" } -- expected identifier near 'then'
+  }
+}
