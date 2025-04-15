@@ -38,19 +38,21 @@ function M.get_channels_promise()
     exclude_archived = true,
     limit = 1000
   }
-  
-  return get_core().request_promise('GET', 'conversations.list', params)
-    :then(function(data)
+
+  local promise = get_core().request_promise('GET', 'conversations.list', params)
+  return utils.Promise.catch_func(
+    utils.Promise.then_func(promise, function(data)
       -- チャンネル一覧取得イベントを発行
       events.emit('api:channels_loaded', data.channels)
-      
+
       return data.channels
-    end)
-    :catch(function(err)
+    end),
+    function(err)
       local error_msg = err.error or 'Unknown error'
       notify('チャンネル一覧の取得に失敗しました - ' .. error_msg, vim.log.levels.ERROR)
       return utils.Promise.reject(err)
-    end)
+    end
+  )
 end
 
 --- チャンネル一覧を取得（コールバック版 - 後方互換性のため）
@@ -68,7 +70,7 @@ function M.get_channel_id_promise(channel_name)
       resolve(channel_name)
     end)
   end
-  
+
   -- チャンネル一覧を取得するPromiseを作成
   return utils.Promise.new(function(resolve, reject)
     -- チャンネル一覧から検索
@@ -78,7 +80,7 @@ function M.get_channel_id_promise(channel_name)
         reject({ error = 'チャンネル一覧の取得に失敗しました' })
         return
       end
-      
+
       -- チャンネル名からIDを検索
       for _, channel in ipairs(channels) do
         if channel.name == channel_name then
@@ -86,7 +88,7 @@ function M.get_channel_id_promise(channel_name)
           return
         end
       end
-      
+
       notify('チャンネル "' .. channel_name .. '" が見つかりません', vim.log.levels.ERROR)
       reject({ error = 'チャンネルが見つかりません: ' .. channel_name })
     end)
@@ -103,7 +105,7 @@ function M.get_channel_id(channel_name, callback)
     callback(channel_name)
     return
   end
-  
+
   -- チャンネル一覧から検索
   M.get_channels(function(success, channels)
     if not success then
@@ -111,7 +113,7 @@ function M.get_channel_id(channel_name, callback)
       callback(nil)
       return
     end
-    
+
     -- チャンネル名からIDを検索
     for _, channel in ipairs(channels) do
       if channel.name == channel_name then
@@ -119,7 +121,7 @@ function M.get_channel_id(channel_name, callback)
         return
       end
     end
-    
+
     notify('チャンネル "' .. channel_name .. '" が見つかりません', vim.log.levels.ERROR)
     callback(nil)
   end)

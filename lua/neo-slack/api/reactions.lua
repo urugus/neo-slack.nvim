@@ -41,7 +41,7 @@ function M.add_reaction_promise(message_ts, emoji, channel_id)
     if not channel_id then
       -- 現在のチャンネルIDを取得するためのイベントを発行
       events.emit('api:get_current_channel')
-      
+
       -- イベントハンドラを一度だけ登録
       events.once('api:current_channel', function(current_channel_id)
         if not current_channel_id then
@@ -49,43 +49,48 @@ function M.add_reaction_promise(message_ts, emoji, channel_id)
           reject({ error = 'チャンネルIDが設定されていません' })
           return
         end
-        
+
         -- 取得したチャンネルIDで再帰的に呼び出し
-        M.add_reaction_promise(message_ts, emoji, current_channel_id)
-          :then(resolve)
-          :catch(reject)
+        local promise = M.add_reaction_promise(message_ts, emoji, current_channel_id)
+        utils.Promise.catch_func(
+          utils.Promise.then_func(promise, resolve),
+          reject
+        )
       end)
-      
+
       return
     end
-    
+
     -- 絵文字名から「:」を削除
     emoji = emoji:gsub(':', '')
-    
+
     local params = {
       channel = channel_id,
       timestamp = message_ts,
       name = emoji,
     }
-    
-    get_core().request_promise('POST', 'reactions.add', params)
-      :then(function(data)
+
+    local request_promise = get_core().request_promise('POST', 'reactions.add', params)
+
+    utils.Promise.catch_func(
+      utils.Promise.then_func(request_promise, function(data)
         notify('リアクションを追加しました', vim.log.levels.INFO)
-        
+
         -- リアクション追加イベントを発行
         events.emit('api:reaction_added', channel_id, message_ts, emoji, data)
-        
+
         resolve(data)
-      end)
-      :catch(function(err)
+      end),
+      function(err)
         local error_msg = err.error or 'Unknown error'
         notify('リアクションの追加に失敗しました - ' .. error_msg, vim.log.levels.ERROR)
-        
+
         -- リアクション追加失敗イベントを発行
         events.emit('api:reaction_added_failure', channel_id, message_ts, emoji, err)
-        
+
         reject(err)
-      end)
+      end
+    )
   end)
 end
 
@@ -95,17 +100,19 @@ end
 --- @param callback function コールバック関数
 --- @return nil
 function M.add_reaction(message_ts, emoji, callback)
-  M.add_reaction_promise(message_ts, emoji)
-    :then(function()
+  local promise = M.add_reaction_promise(message_ts, emoji)
+  utils.Promise.catch_func(
+    utils.Promise.then_func(promise, function()
       vim.schedule(function()
         callback(true)
       end)
-    end)
-    :catch(function()
+    end),
+    function()
       vim.schedule(function()
         callback(false)
       end)
-    end)
+    end
+  )
 end
 
 return M
