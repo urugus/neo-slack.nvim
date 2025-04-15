@@ -44,18 +44,21 @@ function M.create_callback_version(promise_fn)
     local args = {...}
     local callback = args[#args]
     args[#args] = nil
-    
+
     local promise = promise_fn(unpack(args))
-    
-    promise:then(function(data)
-      vim.schedule(function()
-        callback(true, data)
-      end)
-    end):catch(function(err)
-      vim.schedule(function()
-        callback(false, err)
-      end)
-    end)
+
+    utils.Promise.catch_func(
+      utils.Promise.then_func(promise, function(data)
+        vim.schedule(function()
+          callback(true, data)
+        end)
+      end),
+      function(err)
+        vim.schedule(function()
+          callback(false, err)
+        end)
+      end
+    )
   end
 end
 
@@ -70,14 +73,14 @@ end
 function M.request_promise(method, endpoint, params, options, token, base_url)
   params = params or {}
   options = options or {}
-  
+
   return utils.Promise.new(function(resolve, reject)
     local headers = {
       Authorization = 'Bearer ' .. token,
     }
-    
+
     local url = base_url .. endpoint
-    
+
     local opts = {
       headers = headers,
       callback = function(response)
@@ -85,22 +88,22 @@ function M.request_promise(method, endpoint, params, options, token, base_url)
           reject({ error = 'HTTP error: ' .. response.status, status = response.status })
           return
         end
-        
+
         local success, data = pcall(json.decode, response.body)
         if not success then
           reject({ error = 'JSON parse error: ' .. data })
           return
         end
-        
+
         if not data.ok then
           reject({ error = data.error or 'Unknown API error', data = data })
           return
         end
-        
+
         resolve(data)
       end
     }
-    
+
     if method == 'GET' then
       -- GETリクエストの場合、パラメータをURLクエリパラメータとして送信
       -- ブール値を文字列に変換（plenary.curlはブール値を処理できない）

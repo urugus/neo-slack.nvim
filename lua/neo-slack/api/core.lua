@@ -48,11 +48,11 @@ end
 --- @return table Promise
 function M.request_promise(method, endpoint, params, options)
   return api_utils.request_promise(
-    method, 
-    endpoint, 
-    params, 
-    options, 
-    M.config.token, 
+    method,
+    endpoint,
+    params,
+    options,
+    M.config.token,
     M.config.base_url
   )
 end
@@ -69,21 +69,25 @@ M.request = api_utils.create_callback_version(M.request_promise)
 --- @return table Promise
 function M.test_connection_promise()
   local promise = M.request_promise('GET', 'auth.test', {})
-  
-  return promise:then(function(data)
-    -- チーム情報を保存
-    M.config.team_info = data
-    
-    -- 接続成功イベントを発行
-    events.emit('api:connected', data)
-    
-    return data
-  end):catch(function(err)
-    -- 接続失敗イベントを発行
-    events.emit('api:connection_failed', err)
-    
-    return utils.Promise.reject(err)
-  end)
+
+  -- utils.Promise.then_funcとcatch_funcを使用
+  return utils.Promise.catch_func(
+    utils.Promise.then_func(promise, function(data)
+      -- チーム情報を保存
+      M.config.team_info = data
+
+      -- 接続成功イベントを発行
+      events.emit('api:connected', data)
+
+      return data
+    end),
+    function(err)
+      -- 接続失敗イベントを発行
+      events.emit('api:connection_failed', err)
+
+      return utils.Promise.reject(err)
+    end
+  )
 end
 
 --- 接続テスト（コールバック版 - 後方互換性のため）

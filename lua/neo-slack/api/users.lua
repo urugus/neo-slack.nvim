@@ -38,14 +38,14 @@ end
 --- @return table Promise
 function M.get_user_info_promise()
   local promise = get_core().request_promise('GET', 'users.identity', {})
-  
-  return promise:then(function(data)
+
+  return utils.Promise.then_func(promise, function(data)
     -- ユーザー情報を保存
     get_core().config.user_info = data
-    
+
     -- ユーザー情報取得イベントを発行
     events.emit('api:user_info_loaded', data)
-    
+
     return data
   end)
 end
@@ -65,27 +65,30 @@ function M.get_user_info_by_id_promise(user_id)
       resolve(M.users_cache[user_id])
     end)
   end
-  
+
   -- APIからユーザー情報を取得
   local params = {
     user = user_id
   }
-  
+
   local promise = get_core().request_promise('GET', 'users.info', params)
-  
-  return promise:then(function(data)
-    -- キャッシュに保存
-    M.users_cache[user_id] = data.user
-    
-    -- ユーザー情報取得イベントを発行
-    events.emit('api:user_info_by_id_loaded', user_id, data.user)
-    
-    return data.user
-  end):catch(function(err)
-    local error_msg = err.error or 'Unknown error'
-    notify('ユーザー情報の取得に失敗しました - ' .. error_msg, vim.log.levels.WARN)
-    return utils.Promise.reject(err)
-  end)
+
+  return utils.Promise.catch_func(
+    utils.Promise.then_func(promise, function(data)
+      -- キャッシュに保存
+      M.users_cache[user_id] = data.user
+
+      -- ユーザー情報取得イベントを発行
+      events.emit('api:user_info_by_id_loaded', user_id, data.user)
+
+      return data.user
+    end),
+    function(err)
+      local error_msg = err.error or 'Unknown error'
+      notify('ユーザー情報の取得に失敗しました - ' .. error_msg, vim.log.levels.WARN)
+      return utils.Promise.reject(err)
+    end
+  )
 end
 
 --- 特定のユーザーIDからユーザー情報を取得（コールバック版 - 後方互換性のため）
@@ -99,19 +102,22 @@ M.get_user_info_by_id = api_utils.create_callback_version(M.get_user_info_by_id_
 --- @return table Promise
 function M.get_username_promise(user_id)
   local promise = M.get_user_info_by_id_promise(user_id)
-  
-  return promise:then(function(user_data)
-    local display_name = user_data.profile.display_name
-    local real_name = user_data.profile.real_name
-    
-    -- display_nameが空の場合はreal_nameを使用
-    local username = (display_name and display_name ~= '') and display_name or real_name
-    
-    return username
-  end):catch(function()
-    -- 失敗した場合はユーザーIDをそのまま返す
-    return user_id
-  end)
+
+  return utils.Promise.catch_func(
+    utils.Promise.then_func(promise, function(user_data)
+      local display_name = user_data.profile.display_name
+      local real_name = user_data.profile.real_name
+
+      -- display_nameが空の場合はreal_nameを使用
+      local username = (display_name and display_name ~= '') and display_name or real_name
+
+      return username
+    end),
+    function()
+      -- 失敗した場合はユーザーIDをそのまま返す
+      return user_id
+    end
+  )
 end
 
 --- ユーザーIDからユーザー名を取得（コールバック版 - 後方互換性のため）
@@ -120,8 +126,8 @@ end
 --- @return nil
 function M.get_username(user_id, callback)
   local promise = M.get_username_promise(user_id)
-  
-  promise:then(function(username)
+
+  utils.Promise.then_func(promise, function(username)
     vim.schedule(function()
       callback(username)
     end)
