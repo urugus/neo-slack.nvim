@@ -678,3 +678,5 @@ function M.show_messages(channel, messages)
   -- 行とメッセージのマッピングを保存
   M.layout.line_to_message = line_to_message
 end
+
+return M
