@@ -268,9 +268,9 @@ function M.reply_message_promise(message_ts, text, channel_id, options)
         end
 
         -- 取得したチャンネルIDで再帰的に呼び出し
-        M.reply_message_promise(message_ts, text, current_channel_id, options)
-          :then(resolve)
-          :catch(reject)
+        local promise = M.reply_message_promise(message_ts, text, current_channel_id, options)
+        promise:then(resolve)
+               :catch(reject)
       end)
 
       return
