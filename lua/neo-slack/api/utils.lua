@@ -74,32 +74,46 @@ function M.request_promise(method, endpoint, params, options, token, base_url)
   params = params or {}
   options = options or {}
 
+  M.notify('APIリクエスト: ' .. method .. ' ' .. endpoint, vim.log.levels.INFO)
+
+  if not token or token == '' then
+    M.notify('APIトークンが設定されていません', vim.log.levels.ERROR)
+    return utils.Promise.new(function(_, reject)
+      reject({ error = 'APIトークンが設定されていません' })
+    end)
+  end
+
   return utils.Promise.new(function(resolve, reject)
     local headers = {
       Authorization = 'Bearer ' .. token,
     }
 
     local url = base_url .. endpoint
+    M.notify('URL: ' .. url, vim.log.levels.INFO)
 
     local opts = {
       headers = headers,
       callback = function(response)
         if response.status ~= 200 then
+          M.notify('HTTPエラー: ' .. response.status, vim.log.levels.ERROR)
           reject({ error = 'HTTP error: ' .. response.status, status = response.status })
           return
         end
 
         local success, data = pcall(json.decode, response.body)
         if not success then
+          M.notify('JSONパースエラー: ' .. data, vim.log.levels.ERROR)
           reject({ error = 'JSON parse error: ' .. data })
           return
         end
 
         if not data.ok then
+          M.notify('APIエラー: ' .. (data.error or 'Unknown API error'), vim.log.levels.ERROR)
           reject({ error = data.error or 'Unknown API error', data = data })
           return
         end
 
+        M.notify('APIリクエスト成功: ' .. endpoint, vim.log.levels.INFO)
         resolve(data)
       end
     }
@@ -108,13 +122,16 @@ function M.request_promise(method, endpoint, params, options, token, base_url)
       -- GETリクエストの場合、パラメータをURLクエリパラメータとして送信
       -- ブール値を文字列に変換（plenary.curlはブール値を処理できない）
       local string_params = M.convert_bool_to_string(params)
+      M.notify('GETリクエストを送信: ' .. vim.inspect(string_params), vim.log.levels.INFO)
       curl.get(url, vim.tbl_extend('force', opts, { query = string_params }))
     elseif method == 'POST' then
       -- POSTリクエストの場合、パラメータをJSONボディとして送信
       opts.headers['Content-Type'] = 'application/json; charset=utf-8'
       opts.body = json.encode(params)
+      M.notify('POSTリクエストを送信', vim.log.levels.INFO)
       curl.post(url, opts)
     else
+      M.notify('未対応のHTTPメソッド: ' .. method, vim.log.levels.ERROR)
       reject({ error = 'Unsupported HTTP method: ' .. method })
     end
   end)

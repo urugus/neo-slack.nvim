@@ -68,11 +68,13 @@ M.request = api_utils.create_callback_version(M.request_promise)
 --- 接続テスト（Promise版）
 --- @return table Promise
 function M.test_connection_promise()
+  api_utils.notify('接続テストを実行します', vim.log.levels.INFO)
   local promise = M.request_promise('GET', 'auth.test', {})
 
   -- utils.Promise.then_funcとcatch_funcを使用
   return utils.Promise.catch_func(
     utils.Promise.then_func(promise, function(data)
+      api_utils.notify('接続テスト成功: ' .. vim.inspect(data), vim.log.levels.INFO)
       -- チーム情報を保存
       M.config.team_info = data
 
@@ -82,6 +84,7 @@ function M.test_connection_promise()
       return data
     end),
     function(err)
+      api_utils.notify('接続テスト失敗: ' .. vim.inspect(err), vim.log.levels.ERROR)
       -- 接続失敗イベントを発行
       events.emit('api:connection_failed', err)
 

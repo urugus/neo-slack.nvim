@@ -117,19 +117,24 @@ end
 
 -- UIを表示
 function M.show()
+  notify('UI表示を開始します', vim.log.levels.INFO)
+
   -- 既存のウィンドウを閉じる
   M.close()
 
   -- レイアウトを計算
   local layout = calculate_layout()
   if not layout then
+    notify('レイアウトの計算に失敗しました', vim.log.levels.ERROR)
     return
   end
 
+  notify('バッファを作成します', vim.log.levels.INFO)
   -- バッファを作成
   M.layout.channels_buf = create_buffer('Neo-Slack-Channels', 'neo-slack-channels', false)
   M.layout.messages_buf = create_buffer('Neo-Slack-Messages', 'neo-slack-messages', false)
 
+  notify('ウィンドウを作成します', vim.log.levels.INFO)
   -- ウィンドウを作成
   M.layout.channels_win = create_window(
     M.layout.channels_buf,
@@ -151,18 +156,22 @@ function M.show()
     'Messages'
   )
 
+  notify('チャンネル一覧を取得します', vim.log.levels.INFO)
   -- チャンネル一覧を表示
   api.get_channels(function(success, channels)
     if success then
+      notify('UIからチャンネル一覧の取得に成功しました: ' .. #channels .. '件', vim.log.levels.INFO)
       M.show_channels(channels)
     else
-      notify('チャンネル一覧の取得に失敗しました', vim.log.levels.ERROR)
+      notify('UIからチャンネル一覧の取得に失敗しました', vim.log.levels.ERROR)
     end
   end)
 
+  notify('キーマッピングを設定します', vim.log.levels.INFO)
   -- キーマッピングを設定
   M.setup_keymaps()
 
+  notify('最初のウィンドウにフォーカスします', vim.log.levels.INFO)
   -- 最初のウィンドウにフォーカス
   vim.api.nvim_set_current_win(M.layout.channels_win)
 end
@@ -251,7 +260,10 @@ end
 -- チャンネル一覧を表示
 ---@param channels table[] チャンネルオブジェクトの配列
 function M.show_channels(channels)
+  notify('UIにチャンネル一覧を表示します: ' .. (channels and #channels or 0) .. '件', vim.log.levels.INFO)
+
   if not M.layout.channels_buf or not vim.api.nvim_buf_is_valid(M.layout.channels_buf) then
+    notify('チャンネルバッファが無効です', vim.log.levels.ERROR)
     return
   end
 
