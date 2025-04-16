@@ -111,7 +111,7 @@ function M.request_promise(method, endpoint, params, options, token, base_url)
           M.notify('APIエラー: ' .. (data.error or 'Unknown API error'), vim.log.levels.ERROR)
           reject({ error = data.error or 'Unknown API error', data = data })
           return
-        }
+        end
 
         M.notify('APIリクエスト成功: ' .. endpoint, vim.log.levels.INFO)
         resolve(data)

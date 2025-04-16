@@ -31,7 +31,7 @@ exclude_files = {
 ignore = {
   "212", -- 未使用の引数
   "213", -- 未使用の変数
-  "E011", -- expected identifier near 'then'（Promise構文のため）
+  -- "E011" は削除 - 構文エラーを検出するために無視しない
 }
 
 -- 最大行長
@@ -43,9 +43,7 @@ max_string_line_length = 120
 -- 最大コメント行長
 max_comment_line_length = 120
 
--- 構文エラーを無視する設定
+-- 特定のファイルに対する設定
 files = {
-  ["lua/neo-slack/api.lua"] = {
-    ignore = { "E011" } -- expected identifier near 'then'
-  }
+  -- 構文エラーを無視する設定は削除
 }
