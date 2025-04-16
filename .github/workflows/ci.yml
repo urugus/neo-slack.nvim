@@ -23,9 +23,8 @@ jobs:
         run: luarocks install luacheck
       - name: Run luacheck
         run: |
-          # 警告とエラーがあっても成功するように設定
-          # 特に、E011エラー（expected identifier near 'then'）を無視
-          luacheck lua/ --codes --ignore E011 || [ $? -eq 1 -o $? -eq 2 ]
+          # 構文エラーを検出するために、エラーが発生した場合はCIを失敗させる
+          luacheck lua/ --codes
 
   stylua:
     name: StyLua
@@ -39,7 +38,7 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           version: latest
           args: --check lua/
-        continue-on-error: true  # エラーがあっても続行する
+        # エラーが発生した場合はCIを失敗させる
 
   tests:
     name: Tests
