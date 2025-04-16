@@ -17,7 +17,7 @@ local function read_dir(path)
 end
 
 -- 全てのLuaファイルをチェック
-local files = read_dir("lua/")
+local files = read_dir("../lua/")
 local errors = {}
 
 for _, file in ipairs(files) do

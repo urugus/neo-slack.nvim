@@ -1,12 +1,20 @@
 ---@brief [[
 --- neo-slack.nvim 初期化管理モジュール
 --- プラグインの初期化プロセスを管理します
+--- 改良版：依存性注入パターンを活用
 ---@brief ]]
 
-local events = require('neo-slack.core.events')
-local utils = require('neo-slack.utils')
-local config = require('neo-slack.core.config')
-local state = require('neo-slack.state')
+-- 依存性注入コンテナ
+local dependency = require('neo-slack.core.dependency')
+
+-- 依存モジュールの取得用関数
+local function get_events() return dependency.get('core.events') end
+local function get_utils() return dependency.get('utils') end
+local function get_config() return dependency.get('core.config') end
+local function get_state() return dependency.get('state') end
+local function get_storage() return dependency.get('storage') end
+local function get_api() return dependency.get('api') end
+local function get_notification() return dependency.get('notification') end
 
 ---@class NeoSlackInitialization
 ---@field status table 初期化ステータス
@@ -52,15 +60,18 @@ M.reconnect_timer = nil
 -- 通知ヘルパー関数
 ---@param message string 通知メッセージ
 ---@param level number 通知レベル
-local function notify(message, level)
-  utils.notify(message, level)
+---@param opts table|nil 追加オプション
+local function notify(message, level, opts)
+  opts = opts or {}
+  opts.prefix = '初期化: '
+  get_utils().notify(message, level, opts)
 end
 
 -- デバッグログ
 ---@param message string ログメッセージ
 local function debug_log(message)
-  if config.is_debug() then
-    notify('初期化: ' .. message, vim.log.levels.DEBUG)
+  if get_config().is_debug() then
+    notify(message, vim.log.levels.DEBUG)
   end
 end
 
@@ -72,7 +83,7 @@ local function start_step(step_name)
     if step.name == step_name then
       M.current_step = i
       debug_log(string.format('[%d/%d] %s を開始...', i, M.total_steps, step.description))
-      events.emit('initialization:step_started', step_name, i, M.total_steps)
+      get_events().emit('initialization:step_started', step_name, i, M.total_steps)
       return true
     end
   end
@@ -96,13 +107,13 @@ local function complete_step(step_name, success, error_message)
     notify(message, vim.log.levels.ERROR)
   end
 
-  events.emit('initialization:step_completed', step_name, success, error_message)
+  get_events().emit('initialization:step_completed', step_name, success, error_message)
 
   -- 全てのステップが完了したかチェック
   if M.current_step == M.total_steps then
     M.is_initializing = false
     M.is_initialized = true
-    events.emit('initialization:completed', M.status)
+    get_events().emit('initialization:completed', M.status)
 
     -- 成功したステップ数をカウント
     local success_count = 0
@@ -153,31 +164,29 @@ function M.run_next_step(callback)
   -- ステップごとの処理
   if step.name == 'core' then
     -- コアモジュールの初期化
-    events.emit('core:before_init', config.get())
+    get_events().emit('core:before_init', get_config().get())
     complete_step('core', true)
     run_next_step_async(callback)
 
   elseif step.name == 'storage' then
     -- ストレージの初期化
-    local storage = require('neo-slack.storage')
-    local success = storage.init()
+    local success = get_storage().init()
     complete_step('storage', success, success and nil or 'ストレージディレクトリの作成に失敗しました')
     run_next_step_async(callback)
 
   elseif step.name == 'token' then
     -- トークンの取得
-    local token = config.get('token')
+    local token = get_config().get('token')
 
     if token and token ~= '' then
       complete_step('token', true)
       run_next_step_async(callback)
     else
       -- ストレージからトークンを読み込み
-      local storage = require('neo-slack.storage')
-      local saved_token = storage.load_token()
+      local saved_token = get_storage().load_token()
 
       if saved_token then
-        config.set('token', saved_token)
+        get_config().set('token', saved_token)
         notify('保存されたトークンを読み込みました', vim.log.levels.INFO)
         complete_step('token', true)
         run_next_step_async(callback)
@@ -204,10 +213,10 @@ function M.run_next_step(callback)
           end
 
           -- トークンを設定
-          config.set('token', input)
+          get_config().set('token', input)
 
           -- トークンを保存
-          if storage.save_token(input) then
+          if get_storage().save_token(input) then
             notify('トークンを保存しました', vim.log.levels.INFO)
           else
             notify('トークンの保存に失敗しました', vim.log.levels.ERROR)
@@ -221,13 +230,12 @@ function M.run_next_step(callback)
 
   elseif step.name == 'api' then
     -- APIクライアントの初期化
-    local api = require('neo-slack.api.init')
-    local token = config.get('token')
+    local token = get_config().get('token')
 
-    api.setup(token)
+    get_api().setup(token)
 
     -- 接続テスト
-    api.test_connection(function(success, data)
+    get_api().test_connection(function(success, data)
       if success then
         notify('Slack APIに接続しました - ワークスペース: ' .. (data.team or 'Unknown'), vim.log.levels.INFO)
         complete_step('api', true)
@@ -240,9 +248,8 @@ function M.run_next_step(callback)
 
   elseif step.name == 'notification' then
     -- 通知システムの初期化
-    if config.get('notification') then
-      local notification = require('neo-slack.notification')
-      notification.setup(config.get('refresh_interval'))
+    if get_config().get('notification') then
+      get_notification().setup(get_config().get('refresh_interval'))
       complete_step('notification', true)
     else
       debug_log('通知システムは無効です')
@@ -252,30 +259,27 @@ function M.run_next_step(callback)
 
   elseif step.name == 'data' then
     -- データの読み込み
-    local storage = require('neo-slack.storage')
-    local state = require('neo-slack.state')
-
     -- スター付きチャンネルの情報を読み込み
-    local starred_channels = storage.load_starred_channels()
-    state.set_starred_channels(starred_channels)
+    local starred_channels = get_storage().load_starred_channels()
+    get_state().set_starred_channels(starred_channels)
 
     -- カスタムセクションの情報を読み込み
-    local custom_sections = storage.load_custom_sections()
-    state.custom_sections = custom_sections
+    local custom_sections = get_storage().load_custom_sections()
+    get_state().custom_sections = custom_sections
 
     -- チャンネルとセクションの関連付けを読み込み
-    local channel_section_map = storage.load_channel_section_map()
-    state.channel_section_map = channel_section_map
+    local channel_section_map = get_storage().load_channel_section_map()
+    get_state().channel_section_map = channel_section_map
 
     -- セクションの折りたたみ状態を初期化
-    state.init_section_collapsed()
+    get_state().init_section_collapsed()
 
     complete_step('data', true)
     run_next_step_async(callback)
 
   elseif step.name == 'ui' then
     -- UIの初期化
-    state.set_initialized(true)
+    get_state().set_initialized(true)
     complete_step('ui', true)
     run_next_step_async(callback)
 
@@ -295,9 +299,17 @@ function M.run_next_step(callback)
   end
 end
 
+-- 依存性を初期化
+local function initialize_dependencies()
+  -- 依存性コンテナを初期化
+  dependency.initialize()
+end
+
 -- 初期化を開始
 ---@param callback function|nil 完了時のコールバック
 function M.start(callback)
+  -- 依存性を初期化
+  initialize_dependencies()
   if M.is_initializing then
     notify('初期化は既に進行中です', vim.log.levels.WARN)
     return
@@ -321,7 +333,7 @@ function M.start(callback)
   end
 
   -- 初期化開始イベントを発行
-  events.emit('initialization:started')
+  get_events().emit('initialization:started')
 
   notify('初期化を開始します...', vim.log.levels.INFO)
 
@@ -350,12 +362,12 @@ function M.setup_reconnect_timer()
   end
 
   -- 再接続が無効な場合は何もしない
-  if not config.get('auto_reconnect', true) then
+  if not get_config().get('auto_reconnect', true) then
     return
   end
 
   -- 再接続間隔（秒）
-  local interval = config.get('reconnect_interval', 300) -- デフォルト5分
+  local interval = get_config().get('reconnect_interval', 300) -- デフォルト5分
 
   -- タイマーを作成
   M.reconnect_timer = vim.loop.new_timer()
@@ -366,21 +378,20 @@ function M.setup_reconnect_timer()
       return
     end
 
-    local api = require('neo-slack.api.init')
-    api.test_connection(function(success, data)
+    get_api().test_connection(function(success, data)
       if success then
         debug_log('接続は正常です - ワークスペース: ' .. (data.team or 'Unknown'))
       else
         notify('接続が切断されました。再接続を試みます...', vim.log.levels.WARN)
 
         -- APIクライアントを再初期化
-        api.setup(config.get('token'))
+        get_api().setup(get_config().get('token'))
 
         -- 再接続テスト
-        api.test_connection(function(reconnect_success, reconnect_data)
+        get_api().test_connection(function(reconnect_success, reconnect_data)
           if reconnect_success then
             notify('再接続に成功しました - ワークスペース: ' .. (reconnect_data.team or 'Unknown'), vim.log.levels.INFO)
-            events.emit('reconnected')
+            get_events().emit('reconnected')
           else
             notify('再接続に失敗しました: ' .. (reconnect_data.error or 'Unknown error'), vim.log.levels.ERROR)
           end

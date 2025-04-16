@@ -1,34 +1,44 @@
 ---@brief [[
 --- neo-slack.nvim プラグインのメインモジュール
 --- プラグインの初期化と主要な機能を提供します
+--- 改良版：依存性注入パターンを活用
 ---@brief ]]
 
--- コアモジュール
-local core = require('neo-slack.core')
-local events = require('neo-slack.core.events')
-local config = require('neo-slack.core.config')
-local initialization = require('neo-slack.core.initialization')
+-- 依存性注入コンテナ
+local dependency = require('neo-slack.core.dependency')
 
--- 機能モジュール
-local api = require('neo-slack.api.init')
-local storage = require('neo-slack.storage')
-local utils = require('neo-slack.utils')
-local notification = require('neo-slack.notification')
-local state = require('neo-slack.state')
-local ui = require('neo-slack.ui')
+-- 依存モジュールの取得用関数
+local function get_core() return dependency.get('core') end
+local function get_events() return dependency.get('core.events') end
+local function get_config() return dependency.get('core.config') end
+local function get_initialization() return dependency.get('core.initialization') end
+local function get_api() return dependency.get('api') end
+local function get_storage() return dependency.get('storage') end
+local function get_utils() return dependency.get('utils') end
+local function get_notification() return dependency.get('notification') end
+local function get_state() return dependency.get('state') end
+local function get_ui() return dependency.get('ui') end
 
 ---@class NeoSlack
 ---@field config NeoSlackConfig 設定オブジェクト
 local M = {}
 
 -- 設定をエクスポート
-M.config = config.current
+-- 設定をエクスポート（遅延ロード）
+M.config = setmetatable({}, {
+  __index = function(_, key)
+    return get_config().current[key]
+  end,
+  __newindex = function(_, key, value)
+    get_config().current[key] = value
+  end
+})
 
 -- 通知ヘルパー関数
 ---@param message string 通知メッセージ
 ---@param level number 通知レベル
 local function notify(message, level)
-  utils.notify(message, level)
+  get_utils().notify(message, level)
 end
 
 --------------------------------------------------
@@ -41,10 +51,14 @@ end
 --- @return boolean 初期化プロセスが開始されたかどうか
 function M.setup(opts, callback)
   -- 設定の初期化
-  config.setup(opts)
+  -- 依存性コンテナを初期化
+  dependency.initialize()
+
+  -- 設定の初期化
+  get_config().setup(opts)
 
   -- 初期化プロセスを開始
-  initialization.start(function(success)
+  get_initialization().start(function(success)
     if success then
       notify('初期化が完了しました', vim.log.levels.INFO)
 
@@ -71,7 +85,7 @@ end
 --- @return table 初期化状態
 function M.get_initialization_status()
   notify('初期化状態を確認します', vim.log.levels.INFO)
-  local status = initialization.get_status()
+  local status = get_initialization().get_status()
 
   -- 初期化状態を表示
   local status_str = '初期化状態: '
@@ -92,39 +106,39 @@ end
 --- イベントハンドラを登録
 function M.register_event_handlers()
   -- チャンネル選択イベント
-  events.on('channel_selected', function(channel_id, channel_name)
+  get_events().on('channel_selected', function(channel_id, channel_name)
     M.select_channel(channel_id, channel_name)
   end)
 
   -- メッセージ送信イベント
-  events.on('message_sent', function(channel, text)
+  get_events().on('message_sent', function(channel, text)
     M.send_message(channel, text)
   end)
 
   -- メッセージ返信イベント
-  events.on('message_replied', function(message_ts, text)
+  get_events().on('message_replied', function(message_ts, text)
     M.reply_message(message_ts, text)
   end)
 
   -- スレッド返信イベント
-  events.on('thread_replied', function(thread_ts, text)
+  get_events().on('thread_replied', function(thread_ts, text)
     M.reply_to_thread(thread_ts, text)
   end)
 
   -- リアクション追加イベント
-  events.on('reaction_added', function(message_ts, emoji)
+  get_events().on('reaction_added', function(message_ts, emoji)
     M.add_reaction(message_ts, emoji)
   end)
 
   -- ファイルアップロードイベント
-  events.on('file_uploaded', function(channel, file_path)
+  get_events().on('file_uploaded', function(channel, file_path)
     M.upload_file(channel, file_path)
   end)
 
   -- 再接続イベント
-  events.on('reconnected', function()
+  get_events().on('reconnected', function()
     -- 現在のチャンネルのメッセージを更新
-    local channel_id = state.get_current_channel()
+    local channel_id = get_state().get_current_channel()
     if channel_id then
       M.list_messages(channel_id)
     end
@@ -136,12 +150,12 @@ end
 function M.status()
   notify('接続状態を確認します', vim.log.levels.INFO)
 
-  api.test_connection(function(success, data)
+  get_api().test_connection(function(success, data)
     if success then
       notify('接続成功 - ワークスペース: ' .. (data.team or 'Unknown'), vim.log.levels.INFO)
 
       -- 初期化状態を表示
-      local init_status = initialization.get_status()
+      local init_status = get_initialization().get_status()
       local status_str = '初期化状態: '
 
       if init_status.is_initialized then

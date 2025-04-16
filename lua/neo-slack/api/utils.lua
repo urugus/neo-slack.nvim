@@ -1,11 +1,17 @@
 ---@brief [[
 --- neo-slack.nvim API ユーティリティモジュール
 --- API関連の共通ヘルパー関数を提供します
+--- 改良版：依存性注入パターンを活用
 ---@brief ]]
 
 local curl = require('plenary.curl')
 local json = { encode = vim.json.encode, decode = vim.json.decode }
-local utils = require('neo-slack.utils')
+
+-- 依存性注入コンテナ
+local dependency = require('neo-slack.core.dependency')
+
+-- 依存モジュールの取得用関数
+local function get_utils() return dependency.get('utils') end
 
 ---@class NeoSlackAPIUtils
 local M = {}
@@ -18,7 +24,7 @@ local M = {}
 function M.notify(message, level, opts)
   opts = opts or {}
   opts.prefix = 'API: '
-  utils.notify(message, level, opts)
+  get_utils().notify(message, level, opts)
 end
 
 -- パラメータ内のブール値を文字列に変換
@@ -47,8 +53,8 @@ function M.create_callback_version(promise_fn)
 
     local promise = promise_fn(unpack(args))
 
-    utils.Promise.catch_func(
-      utils.Promise.then_func(promise, function(data)
+    get_utils().Promise.catch_func(
+      get_utils().Promise.then_func(promise, function(data)
         vim.schedule(function()
           callback(true, data)
         end)
@@ -78,12 +84,12 @@ function M.request_promise(method, endpoint, params, options, token, base_url)
 
   if not token or token == '' then
     M.notify('APIトークンが設定されていません', vim.log.levels.ERROR)
-    return utils.Promise.new(function(_, reject)
+    return get_utils().Promise.new(function(_, reject)
       reject({ error = 'APIトークンが設定されていません' })
     end)
   end
 
-  return utils.Promise.new(function(resolve, reject)
+  return get_utils().Promise.new(function(resolve, reject)
     local headers = {
       Authorization = 'Bearer ' .. token,
     }
