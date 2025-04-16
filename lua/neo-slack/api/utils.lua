@@ -105,13 +105,13 @@ function M.request_promise(method, endpoint, params, options, token, base_url)
           M.notify('JSONパースエラー: ' .. data, vim.log.levels.ERROR)
           reject({ error = 'JSON parse error: ' .. data })
           return
-        end
+        }
 
         if not data.ok then
           M.notify('APIエラー: ' .. (data.error or 'Unknown API error'), vim.log.levels.ERROR)
           reject({ error = data.error or 'Unknown API error', data = data })
           return
-        end
+        }
 
         M.notify('APIリクエスト成功: ' .. endpoint, vim.log.levels.INFO)
         resolve(data)
