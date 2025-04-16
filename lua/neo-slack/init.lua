@@ -48,6 +48,10 @@ function M.setup(opts, callback)
     if success then
       notify('初期化が完了しました', vim.log.levels.INFO)
 
+      -- イベントハンドラを登録（循環参照を避けるために明示的に呼び出す）
+      M.register_event_handlers()
+      notify('イベントハンドラを登録しました', vim.log.levels.DEBUG)
+
       -- 注意: 自動的にチャンネル一覧を表示しないように変更
       -- チャンネル一覧を表示するには :SlackChannels コマンドを使用してください
     else
