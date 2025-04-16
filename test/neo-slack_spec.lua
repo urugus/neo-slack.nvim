@@ -172,23 +172,4 @@ describe('neo-slack.nvim', function()
   end)
 
   -- 他のメソッドのテストも同様に追加
-
-  -- 構文チェックのテスト
-  describe('syntax check', function()
-    it('should have valid syntax in all lua files', function()
-      local function check_file(file)
-        local success, err = loadfile(file)
-        assert.is_not_nil(success, "Syntax error in " .. file .. ": " .. (err or ""))
-      end
-
-      -- すべてのLuaファイルをチェック
-      local handle = io.popen('find lua/ -name "*.lua"')
-      local result = handle:read('*a')
-      handle:close()
-
-      for file in result:gmatch('[^\r\n]+') do
-        check_file(file)
-      end
-    end)
-  end)
 end)

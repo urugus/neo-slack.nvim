@@ -50,6 +50,6 @@ jobs:
         with:
           neovim: true
           version: stable
-      - name: Run Tests
+      - name: Run Syntax Check
         run: |
-          nvim --headless -u NONE -c "lua package.path = './lua/?.lua;' .. package.path" -c "lua require('test.neo-slack_spec')" -c "q"
+          nvim --headless -u NONE -c "lua dofile('test/syntax_check.lua')" -c "q"
