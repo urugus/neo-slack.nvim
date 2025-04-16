@@ -201,7 +201,7 @@ end
 function M.setup_keymaps()
   -- チャンネル一覧のキーマッピング
   if M.layout.channels_buf and vim.api.nvim_buf_is_valid(M.layout.channels_buf) then
-    local opts = { noremap = true, silent = true, buffer = M.layout.channels_buf }
+    local opts = { noremap = true, silent = true }
 
     -- Enter: チャンネルを選択
     vim.api.nvim_buf_set_keymap(M.layout.channels_buf, 'n', '<CR>', [[<cmd>lua require('neo-slack.ui').select_channel()<CR>]], opts)
@@ -221,7 +221,7 @@ function M.setup_keymaps()
 
   -- メッセージ一覧のキーマッピング
   if M.layout.messages_buf and vim.api.nvim_buf_is_valid(M.layout.messages_buf) then
-    local opts = { noremap = true, silent = true, buffer = M.layout.messages_buf }
+    local opts = { noremap = true, silent = true }
 
     -- Enter: スレッドを表示
     vim.api.nvim_buf_set_keymap(M.layout.messages_buf, 'n', '<CR>', [[<cmd>lua require('neo-slack.ui').show_thread()<CR>]], opts)
@@ -241,7 +241,7 @@ function M.setup_keymaps()
 
   -- スレッド表示のキーマッピング
   if M.layout.thread_buf and vim.api.nvim_buf_is_valid(M.layout.thread_buf) then
-    local opts = { noremap = true, silent = true, buffer = M.layout.thread_buf }
+    local opts = { noremap = true, silent = true }
 
     -- r: スレッドを更新
     vim.api.nvim_buf_set_keymap(M.layout.thread_buf, 'n', 'r', [[<cmd>lua require('neo-slack.ui').refresh_thread()<CR>]], opts)
