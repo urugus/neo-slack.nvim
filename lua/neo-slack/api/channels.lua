@@ -39,10 +39,13 @@ function M.get_channels_promise()
     limit = 1000
   }
 
+  notify('チャンネル一覧を取得中...', vim.log.levels.INFO)
+
   local promise = get_core().request_promise('GET', 'conversations.list', params)
   return utils.Promise.catch_func(
     utils.Promise.then_func(promise, function(data)
       -- チャンネル一覧取得イベントを発行
+      notify('チャンネル一覧を取得しました: ' .. (data.channels and #data.channels or 0) .. '件', vim.log.levels.INFO)
       events.emit('api:channels_loaded', data.channels)
 
       return data.channels

@@ -42,31 +42,47 @@ end
 function M.setup(opts, callback)
   -- 設定の初期化
   config.setup(opts)
-  
+
   -- 初期化プロセスを開始
   initialization.start(function(success)
     if success then
       notify('初期化が完了しました', vim.log.levels.INFO)
-      
+
       -- 注意: 自動的にチャンネル一覧を表示しないように変更
       -- チャンネル一覧を表示するには :SlackChannels コマンドを使用してください
     else
       notify('初期化に失敗しました。詳細はログを確認してください。', vim.log.levels.ERROR)
     end
-    
+
     -- コールバックを呼び出し
     if callback then
       callback(success)
     end
   end)
-  
+
   return true
 end
 
 --- 初期化状態を取得
 --- @return table 初期化状態
 function M.get_initialization_status()
-  return initialization.get_status()
+  notify('初期化状態を確認します', vim.log.levels.INFO)
+  local status = initialization.get_status()
+
+  -- 初期化状態を表示
+  local status_str = '初期化状態: '
+
+  if status.is_initialized then
+    status_str = status_str .. '完了'
+  elseif status.is_initializing then
+    status_str = status_str .. string.format('進行中 (%d/%d)', status.current_step, status.total_steps)
+  else
+    status_str = status_str .. '未初期化'
+  end
+
+  notify(status_str, vim.log.levels.INFO)
+
+  return status
 end
 
 --- イベントハンドラを登録
@@ -75,32 +91,32 @@ function M.register_event_handlers()
   events.on('channel_selected', function(channel_id, channel_name)
     M.select_channel(channel_id, channel_name)
   end)
-  
+
   -- メッセージ送信イベント
   events.on('message_sent', function(channel, text)
     M.send_message(channel, text)
   end)
-  
+
   -- メッセージ返信イベント
   events.on('message_replied', function(message_ts, text)
     M.reply_message(message_ts, text)
   end)
-  
+
   -- スレッド返信イベント
   events.on('thread_replied', function(thread_ts, text)
     M.reply_to_thread(thread_ts, text)
   end)
-  
+
   -- リアクション追加イベント
   events.on('reaction_added', function(message_ts, emoji)
     M.add_reaction(message_ts, emoji)
   end)
-  
+
   -- ファイルアップロードイベント
   events.on('file_uploaded', function(channel, file_path)
     M.upload_file(channel, file_path)
   end)
-  
+
   -- 再接続イベント
   events.on('reconnected', function()
     -- 現在のチャンネルのメッセージを更新
@@ -114,14 +130,16 @@ end
 --- Slackの接続状態を表示
 --- @return nil
 function M.status()
+  notify('接続状態を確認します', vim.log.levels.INFO)
+
   api.test_connection(function(success, data)
     if success then
       notify('接続成功 - ワークスペース: ' .. (data.team or 'Unknown'), vim.log.levels.INFO)
-      
+
       -- 初期化状態を表示
       local init_status = initialization.get_status()
       local status_str = '初期化状態: '
-      
+
       if init_status.is_initialized then
         status_str = status_str .. '完了'
       elseif init_status.is_initializing then
@@ -129,7 +147,7 @@ function M.status()
       else
         status_str = status_str .. '未初期化'
       end
-      
+
       notify(status_str, vim.log.levels.INFO)
     else
       notify('接続失敗 - ' .. (data.error or 'Unknown error'), vim.log.levels.ERROR)
@@ -160,7 +178,7 @@ function M.prompt_for_token(callback)
       end
       return
     end
-    
+
     -- トークンの検証
     M.validate_and_save_token(input, callback)
   end)
@@ -178,10 +196,10 @@ function M.validate_and_save_token(token, callback)
       -- トークンを保存
       if storage.save_token(token) then
         notify('トークンを保存しました', vim.log.levels.INFO)
-        
+
         -- 設定を更新して初期化を続行
         config.set('token', token)
-        
+
         -- 初期化を再開
         initialization.start(function(init_success)
           if callback then
@@ -211,7 +229,7 @@ function M.delete_token(prompt_new)
   if storage.delete_token() then
     config.set('token', '')
     notify('保存されたトークンを削除しました', vim.log.levels.INFO)
-    
+
     -- 新しいトークンの入力を促す
     if prompt_new then
       vim.defer_fn(function()
@@ -219,7 +237,7 @@ function M.delete_token(prompt_new)
         M.prompt_for_token()
       end, 1000)
     end
-    
+
     return true
   end
   return false
@@ -238,8 +256,10 @@ end
 --- チャンネル一覧を取得して表示
 --- @return nil
 function M.list_channels()
+  notify('SlackChannelsコマンドが実行されました', vim.log.levels.INFO)
   api.get_channels(function(success, channels)
     if success then
+      notify('チャンネル一覧の取得に成功しました: ' .. #channels .. '件', vim.log.levels.INFO)
       -- 状態にチャンネル一覧を保存
       state.set_channels(channels)
       -- UIにチャンネル一覧を表示
@@ -272,7 +292,7 @@ function M.list_messages(channel)
   -- チャンネルが指定されていない場合は、現在のチャンネルまたはデフォルトチャンネルを使用
   local channel_id, channel_name = state.get_current_channel()
   channel = channel or channel_id or config.get('default_channel')
-  
+
   api.get_messages(channel, function(success, messages)
     if success then
       -- 状態にメッセージを保存
@@ -296,7 +316,7 @@ function M.send_message(channel, ...)
   local channel_id = state.get_current_channel()
   channel = channel or channel_id or config.get('default_channel')
   local message = table.concat({...}, ' ')
-  
+
   -- メッセージ送信処理
   local function do_send(text)
     api.send_message(channel, text, function(success)
@@ -311,7 +331,7 @@ function M.send_message(channel, ...)
       end
     end)
   end
-  
+
   if message == '' then
     -- インタラクティブモードでメッセージを入力
     vim.ui.input({ prompt = 'メッセージ: ' }, function(input)
@@ -331,12 +351,12 @@ end
 function M.reply_message(message_ts, ...)
   local reply = table.concat({...}, ' ')
   local channel_id = state.get_current_channel()
-  
+
   if not channel_id then
     notify('現在のチャンネルが設定されていません。メッセージ一覧を表示してから返信してください。', vim.log.levels.ERROR)
     return
   end
-  
+
   -- 返信処理
   local function do_reply(text)
     api.reply_message(message_ts, text, function(success)
@@ -344,7 +364,7 @@ function M.reply_message(message_ts, ...)
       if success then
         -- 返信成功イベントを発行
         events.emit('message_replied_success', message_ts, text)
-        
+
         -- スレッドが表示されている場合は、スレッド一覧を更新
         local current_thread_ts = state.get_current_thread()
         if current_thread_ts == message_ts then
@@ -359,7 +379,7 @@ function M.reply_message(message_ts, ...)
       end
     end)
   end
-  
+
   if reply == '' then
     -- インタラクティブモードで返信を入力
     vim.ui.input({ prompt = '返信: ' }, function(input)
@@ -381,19 +401,19 @@ end
 --- @return nil
 function M.list_thread_replies(thread_ts)
   local channel_id = state.get_current_channel()
-  
+
   if not channel_id then
     notify('現在のチャンネルが設定されていません。メッセージ一覧を表示してからスレッドを表示してください。', vim.log.levels.ERROR)
     return
   end
-  
+
   -- スレッド返信を取得
   api.get_thread_replies(channel_id, thread_ts, function(success, replies, parent_message)
     if success then
       -- 状態にスレッド情報を保存
       state.set_current_thread(thread_ts, parent_message)
       state.set_thread_messages(thread_ts, replies)
-      
+
       -- UIにスレッド返信を表示
       ui.show_thread_replies(thread_ts, replies, parent_message)
     else
@@ -421,12 +441,12 @@ end
 --- @return nil
 function M.add_reaction(message_ts, emoji)
   local channel_id = state.get_current_channel()
-  
+
   if not channel_id then
     notify('現在のチャンネルが設定されていません。メッセージ一覧を表示してからリアクションを追加してください。', vim.log.levels.ERROR)
     return
   end
-  
+
   -- リアクション追加処理
   local function do_react(reaction)
     api.add_reaction(message_ts, reaction, function(success)
@@ -434,7 +454,7 @@ function M.add_reaction(message_ts, emoji)
       if success then
         -- リアクション追加成功イベントを発行
         events.emit('reaction_added_success', message_ts, reaction)
-        
+
         -- スレッドが表示されている場合は、スレッド一覧を更新
         local current_thread_ts = state.get_current_thread()
         if current_thread_ts then
@@ -449,7 +469,7 @@ function M.add_reaction(message_ts, emoji)
       end
     end)
   end
-  
+
   if not emoji then
     -- インタラクティブモードで絵文字を入力
     vim.ui.input({ prompt = 'リアクション (例: thumbsup): ' }, function(input)
@@ -474,7 +494,7 @@ function M.upload_file(channel, file_path)
   -- チャンネルが指定されていない場合は、現在のチャンネルまたはデフォルトチャンネルを使用
   local channel_id = state.get_current_channel()
   channel = channel or channel_id or config.get('default_channel')
-  
+
   -- ファイルアップロード処理
   local function do_upload(path)
     api.upload_file(channel, path, function(success)
@@ -490,7 +510,7 @@ function M.upload_file(channel, file_path)
       end
     end)
   end
-  
+
   if not file_path then
     -- インタラクティブモードでファイルパスを入力
     vim.ui.input({ prompt = 'ファイルパス: ' }, function(input)
