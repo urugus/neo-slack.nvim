@@ -257,6 +257,16 @@ end
 --- @return nil
 function M.list_channels()
   notify('SlackChannelsコマンドが実行されました', vim.log.levels.INFO)
+
+  -- UIが初期化されているか確認
+  if not ui.layout.channels_buf or not vim.api.nvim_buf_is_valid(ui.layout.channels_buf) then
+    notify('UIを初期化します', vim.log.levels.INFO)
+    -- UIを初期化
+    ui.show()
+    -- UIの初期化中にチャンネル一覧を取得するので、ここでは終了
+    return
+  end
+
   api.get_channels(function(success, channels)
     if success then
       notify('チャンネル一覧の取得に成功しました: ' .. #channels .. '件', vim.log.levels.INFO)
