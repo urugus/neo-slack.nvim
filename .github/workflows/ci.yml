@@ -24,7 +24,7 @@ jobs:
       - name: Run luacheck
         run: |
           # 構文エラーのみを検出し、警告は無視する
-          luacheck lua/ --no-unused --no-redefined --no-unused-args --codes
+          luacheck lua/ --no-unused --no-redefined --no-unused-args --codes || [ $? -eq 1 ]
 
   stylua:
     name: StyLua
