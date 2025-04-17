@@ -728,11 +728,66 @@ function M.show_messages(channel, messages)
 
     -- メッセージ内容を表示
     local text = message.text or "(内容なし)"
+
+    -- リッチテキスト形式のメッセージの場合、特殊な処理を行う
+    if message.blocks then
+      -- リッチテキストの内容を取得
+      local rich_text = ""
+      for _, block in ipairs(message.blocks) do
+        if block.type == "rich_text" then
+          for _, element in ipairs(block.elements) do
+            if element.type == "rich_text_section" then
+              for _, sub_element in ipairs(element.elements) do
+                if sub_element.type == "text" then
+                  rich_text = rich_text .. sub_element.text
+                elseif sub_element.type == "user" then
+                  rich_text = rich_text .. "@user"
+                elseif sub_element.type == "usergroup" then
+                  rich_text = rich_text .. "@group"
+                elseif sub_element.type == "channel" then
+                  rich_text = rich_text .. "#channel"
+                elseif sub_element.type == "link" then
+                  rich_text = rich_text .. sub_element.url
+                end
+              end
+            end
+          end
+        end
+      end
+
+      -- リッチテキストがある場合は、それを表示する
+      if rich_text ~= "" then
+        text = rich_text
+      end
+    end
+
     local lines = get_utils().split_lines(text)
 
     -- メッセージ行を追加
     for _, line in ipairs(lines) do
       vim.api.nvim_buf_set_lines(M.layout.messages_buf, current_line, current_line + 1, false, {"  " .. line})
+      line_to_message[current_line] = message
+      current_line = current_line + 1
+    end
+
+    -- リアクションがある場合は表示
+    if message.reactions and #message.reactions > 0 then
+      local reactions_text = "  リアクション: "
+      for i, reaction in ipairs(message.reactions) do
+        reactions_text = reactions_text .. ":" .. reaction.name .. ": " .. reaction.count
+        if i < #message.reactions then
+          reactions_text = reactions_text .. ", "
+        end
+      end
+      vim.api.nvim_buf_set_lines(M.layout.messages_buf, current_line, current_line + 1, false, {reactions_text})
+      line_to_message[current_line] = message
+      current_line = current_line + 1
+    end
+
+    -- スレッドがある場合は表示
+    if message.thread_ts and message.reply_count and message.reply_count > 0 then
+      local thread_text = "  スレッド: " .. message.reply_count .. "件の返信"
+      vim.api.nvim_buf_set_lines(M.layout.messages_buf, current_line, current_line + 1, false, {thread_text})
       line_to_message[current_line] = message
       current_line = current_line + 1
     end
