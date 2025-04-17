@@ -38,13 +38,13 @@ M.level_map = {
 }
 
 -- エラーオブジェクトを作成
----@param type string エラータイプ
+---@param error_type string エラータイプ
 ---@param message string エラーメッセージ
 ---@param details table|nil 追加の詳細情報
 ---@return table エラーオブジェクト
-function M.create_error(type, message, details)
+function M.create_error(error_type, message, details)
   return {
-    type = type or M.error_types.UNKNOWN,
+    type = error_type or M.error_types.UNKNOWN,
     message = message or 'Unknown error',
     details = details or {},
     timestamp = os.time(),
