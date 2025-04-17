@@ -1,6 +1,7 @@
 ---@brief [[
 --- neo-slack.nvim 状態管理モジュール
 --- プラグイン全体の状態を一元管理します
+--- 改良版：依存性注入パターンを活用
 ---@brief ]]
 
 ---@class NeoSlackState
@@ -13,34 +14,17 @@
 ---@field thread_messages table スレッドタイムスタンプをキーとするスレッドメッセージのキャッシュ
 ---@field initialized boolean プラグインが初期化されたかどうか
 
--- 循環参照を避けるため、必要なモジュールは遅延読み込みする
-local storage
-local events
-local utils
+-- 依存性注入コンテナ
+local dependency = require('neo-slack.core.dependency')
+
+-- 依存モジュールの取得用関数
+local function get_storage() return dependency.get('storage') end
+local function get_events() return dependency.get('core.events') end
+local function get_utils() return dependency.get('utils') end
 
 local M = {}
 
--- 必要なモジュールを取得する関数
-local function get_storage()
-  if not storage then
-    storage = require('neo-slack.storage')
-  end
-  return storage
-end
-
-local function get_events()
-  if not events then
-    events = require('neo-slack.core.events')
-  end
-  return events
-end
-
-local function get_utils()
-  if not utils then
-    utils = require('neo-slack.utils')
-  end
-  return utils
-end
+-- これらの関数は不要になりました（依存性注入で置き換え）
 
 -- 通知ヘルパー関数
 ---@param message string 通知メッセージ
@@ -77,7 +61,7 @@ function M.set_current_channel(channel_id, channel_name, silent)
   -- チャンネルを変更したらスレッド情報をリセット
   M.current_thread_ts = nil
   M.current_thread_message = nil
-  
+
   -- イベントを発行
   if not silent then
     get_events().emit('state:channel_changed', channel_id, channel_name)
@@ -98,7 +82,7 @@ end
 function M.set_current_thread(thread_ts, thread_message, silent)
   M.current_thread_ts = thread_ts
   M.current_thread_message = thread_message
-  
+
   -- イベントを発行
   if not silent then
     get_events().emit('state:thread_changed', thread_ts, thread_message)
@@ -117,7 +101,7 @@ end
 ---@param silent boolean|nil イベントを発行しないかどうか
 function M.set_channels(channels, silent)
   M.channels = channels or {}
-  
+
   -- イベントを発行
   if not silent then
     get_events().emit('state:channels_updated', M.channels)
@@ -160,7 +144,7 @@ end
 ---@param silent boolean|nil イベントを発行しないかどうか
 function M.set_messages(channel_id, messages, silent)
   M.messages[channel_id] = messages or {}
-  
+
   -- イベントを発行
   if not silent then
     get_events().emit('state:messages_updated', channel_id, M.messages[channel_id])
@@ -180,7 +164,7 @@ end
 ---@param silent boolean|nil イベントを発行しないかどうか
 function M.set_thread_messages(thread_ts, messages, silent)
   M.thread_messages[thread_ts] = messages or {}
-  
+
   -- イベントを発行
   if not silent then
     get_events().emit('state:thread_messages_updated', thread_ts, M.thread_messages[thread_ts])
@@ -213,7 +197,7 @@ end
 ---@param silent boolean|nil イベントを発行しないかどうか
 function M.set_initialized(initialized, silent)
   M.initialized = initialized
-  
+
   -- イベントを発行
   if not silent then
     get_events().emit('state:initialized_changed', initialized)
@@ -238,7 +222,7 @@ function M.set_channel_starred(channel_id, is_starred, silent)
     -- スター付きから削除
     M.starred_channels[channel_id] = nil
   end
-  
+
   -- イベントを発行
   if not silent then
     get_events().emit('state:channel_starred_changed', channel_id, is_starred)
@@ -287,7 +271,7 @@ end
 function M.init_section_collapsed()
   -- 保存された折りたたみ状態を読み込み
   local saved_collapsed = get_storage().load_section_collapsed()
-  
+
   -- デフォルトでは「スター付き」セクションは展開、「チャンネル」セクションは展開
   M.section_collapsed = {
     starred = saved_collapsed.starred or false,  -- スター付きセクション
@@ -407,12 +391,12 @@ end
 ---@return table ユーザー情報
 function M.set_user_cache(user_id, user_data, silent)
   M.users_cache[user_id] = user_data
-  
+
   -- イベントを発行
   if not silent then
     get_events().emit('state:user_cache_updated', user_id, user_data)
   end
-  
+
   return user_data
 end
 
@@ -424,10 +408,10 @@ function M.get_user_by_id(user_id)
   if M.users_cache[user_id] then
     return M.users_cache[user_id]
   end
-  
+
   -- キャッシュにない場合はイベントを発行して取得を要求
   get_events().emit('api:get_user_info_by_id', user_id)
-  
+
   -- nilを返す（非同期で取得するため）
   return nil
 end

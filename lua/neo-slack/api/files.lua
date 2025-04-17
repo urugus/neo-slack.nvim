@@ -1,11 +1,18 @@
 ---@brief [[
 --- neo-slack.nvim API ファイルモジュール
 --- ファイルのアップロードを行います
+--- 改良版：依存性注入パターンを活用
 ---@brief ]]
 
-local utils = require('neo-slack.utils')
-local api_utils = require('neo-slack.api.utils')
-local events = require('neo-slack.core.events')
+-- 依存性注入コンテナ
+local dependency = require('neo-slack.core.dependency')
+
+-- 依存モジュールの取得用関数
+local function get_utils() return dependency.get('utils') end
+local function get_api_utils() return dependency.get('api.utils') end
+local function get_events() return dependency.get('core.events') end
+local function get_api_core() return dependency.get('api.core') end
+local function get_api_channels() return dependency.get('api.channels') end
 
 ---@class NeoSlackAPIFiles
 local M = {}
@@ -16,27 +23,10 @@ local M = {}
 ---@param opts table|nil 追加オプション
 ---@return nil
 local function notify(message, level, opts)
-  api_utils.notify(message, level, opts)
+  get_api_utils().notify(message, level, opts)
 end
 
--- APIコアモジュールとチャンネルモジュールへの参照を保持する変数
-local core
-local channels
-
--- 必要なモジュールを取得する関数
-local function get_core()
-  if not core then
-    core = require('neo-slack.api.core')
-  end
-  return core
-end
-
-local function get_channels()
-  if not channels then
-    channels = require('neo-slack.api.channels')
-  end
-  return channels
-end
+-- これらの関数は不要になりました（依存性注入で置き換え）
 
 --- ファイルをアップロード（Promise版）
 --- @param channel string チャンネル名またはID
@@ -47,10 +37,10 @@ function M.upload_file_promise(channel, file_path, options)
   options = options or {}
 
   -- チャンネルIDを取得
-  local channel_id_promise = get_channels().get_channel_id_promise(channel)
+  local channel_id_promise = get_api_channels().get_channel_id_promise(channel)
 
-  return utils.Promise.then_func(channel_id_promise, function(channel_id)
-    return utils.Promise.new(function(resolve, reject)
+  return get_utils().Promise.then_func(channel_id_promise, function(channel_id)
+    return get_utils().Promise.new(function(resolve, reject)
       -- ファイルの存在確認
       local file = io.open(file_path, 'r')
       if not file then
@@ -67,7 +57,7 @@ function M.upload_file_promise(channel, file_path, options)
         'curl -s -F file=@%s -F channels=%s -F token=%s https://slack.com/api/files.upload',
         vim.fn.shellescape(file_path),
         vim.fn.shellescape(channel_id),
-        vim.fn.shellescape(get_core().config.token)
+        vim.fn.shellescape(get_api_core().config.token)
       )
 
       -- オプションがあれば追加
@@ -107,13 +97,13 @@ function M.upload_file_promise(channel, file_path, options)
             notify('ファイルをアップロードしました', vim.log.levels.INFO)
 
             -- ファイルアップロードイベントを発行
-            events.emit('api:file_uploaded', channel_id, file_path)
+            get_events().emit('api:file_uploaded', channel_id, file_path)
           else
             local error_msg = 'ファイルのアップロードに失敗しました (exit code: ' .. exit_code .. ')'
             notify(error_msg, vim.log.levels.ERROR)
 
             -- ファイルアップロード失敗イベントを発行
-            events.emit('api:file_uploaded_failure', channel_id, file_path, { error = error_msg })
+            get_events().emit('api:file_uploaded_failure', channel_id, file_path, { error = error_msg })
 
             reject({ error = error_msg })
           end
@@ -130,8 +120,8 @@ end
 --- @return nil
 function M.upload_file(channel, file_path, callback)
   local promise = M.upload_file_promise(channel, file_path)
-  utils.Promise.catch_func(
-    utils.Promise.then_func(promise, function()
+  get_utils().Promise.catch_func(
+    get_utils().Promise.then_func(promise, function()
       vim.schedule(function()
         callback(true)
       end)
