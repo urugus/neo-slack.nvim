@@ -15,6 +15,7 @@ local function get_state() return dependency.get('state') end
 local function get_storage() return dependency.get('storage') end
 local function get_api() return dependency.get('api') end
 local function get_notification() return dependency.get('notification') end
+local function get_errors() return dependency.get('core.errors') end
 
 ---@class NeoSlackInitialization
 ---@field status table 初期化ステータス
@@ -96,6 +97,7 @@ end
 ---@param error_message string|nil エラーメッセージ
 local function complete_step(step_name, success, error_message)
   M.status[step_name] = success
+  local errors = get_errors()
 
   if success then
     debug_log(string.format('[%d/%d] %s が完了しました', M.current_step, M.total_steps, M.steps[M.current_step].description))
@@ -104,7 +106,20 @@ local function complete_step(step_name, success, error_message)
     if error_message then
       message = message .. ': ' .. error_message
     end
-    notify(message, vim.log.levels.ERROR)
+
+    -- エラーオブジェクトを作成して処理
+    local error_obj = errors.create_error(
+      errors.error_types.INTERNAL,
+      message,
+      {
+        step = step_name,
+        step_number = M.current_step,
+        total_steps = M.total_steps,
+        original_error = error_message
+      }
+    )
+
+    errors.handle_error(error_obj, nil, nil, vim.log.levels.ERROR, { prefix = '初期化: ' })
   end
 
   get_events().emit('initialization:step_completed', step_name, success, error_message)
@@ -240,8 +255,21 @@ function M.run_next_step(callback)
         notify('Slack APIに接続しました - ワークスペース: ' .. (data.team or 'Unknown'), vim.log.levels.INFO)
         complete_step('api', true)
       else
-        notify('Slack APIへの接続に失敗しました: ' .. (data.error or 'Unknown error'), vim.log.levels.ERROR)
-        complete_step('api', false, data.error or 'Unknown error')
+        local errors = get_errors()
+        local error_message = data.error or 'Unknown error'
+
+        -- エラーオブジェクトを作成
+        local error_obj = errors.create_error(
+          errors.error_types.API,
+          'Slack APIへの接続に失敗しました: ' .. error_message,
+          {
+            step = 'api',
+            error_data = data
+          }
+        )
+
+        -- エラーを処理（通知はcomplete_step内で行われる）
+        complete_step('api', false, error_message)
       end
       run_next_step_async(callback)
     end)
@@ -382,7 +410,16 @@ function M.setup_reconnect_timer()
       if success then
         debug_log('接続は正常です - ワークスペース: ' .. (data.team or 'Unknown'))
       else
-        notify('接続が切断されました。再接続を試みます...', vim.log.levels.WARN)
+        local errors = get_errors()
+
+        -- 接続切断エラーを作成（警告レベル）
+        local disconnect_error = errors.create_error(
+          errors.error_types.NETWORK,
+          '接続が切断されました。再接続を試みます...',
+          { last_error = data.error }
+        )
+
+        errors.handle_error(disconnect_error, nil, nil, vim.log.levels.WARN)
 
         -- APIクライアントを再初期化
         get_api().setup(get_config().get('token'))
@@ -393,7 +430,17 @@ function M.setup_reconnect_timer()
             notify('再接続に成功しました - ワークスペース: ' .. (reconnect_data.team or 'Unknown'), vim.log.levels.INFO)
             get_events().emit('reconnected')
           else
-            notify('再接続に失敗しました: ' .. (reconnect_data.error or 'Unknown error'), vim.log.levels.ERROR)
+            -- 再接続失敗エラーを作成
+            local reconnect_error = errors.create_error(
+              errors.error_types.NETWORK,
+              '再接続に失敗しました: ' .. (reconnect_data.error or 'Unknown error'),
+              {
+                original_error = reconnect_data.error,
+                error_data = reconnect_data
+              }
+            )
+
+            errors.handle_error(reconnect_error)
           end
         end)
       end

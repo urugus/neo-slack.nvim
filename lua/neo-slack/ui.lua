@@ -3,11 +3,15 @@
 --- ユーザーインターフェースを構築します
 ---@brief ]]
 
-local api = require('neo-slack.api.init')
-local utils = require('neo-slack.utils')
-local state = require('neo-slack.state')
-local events = require('neo-slack.core.events')
-local config = require('neo-slack.core.config')
+-- 依存性注入コンテナ
+local dependency = require('neo-slack.core.dependency')
+
+-- 依存モジュールの取得用関数
+local function get_api() return dependency.get('api') end
+local function get_utils() return dependency.get('utils') end
+local function get_state() return dependency.get('state') end
+local function get_events() return dependency.get('core.events') end
+local function get_config() return dependency.get('core.config') end
 
 ---@class NeoSlackUI
 ---@field layout table レイアウト情報
@@ -35,7 +39,7 @@ M.layout = {
 local function notify(message, level, opts)
   opts = opts or {}
   opts.prefix = 'UI: '
-  utils.notify(message, level, opts)
+  get_utils().notify(message, level, opts)
 end
 
 -- バッファを作成
@@ -158,7 +162,7 @@ function M.show()
 
   notify('チャンネル一覧を取得します', vim.log.levels.INFO)
   -- チャンネル一覧を表示
-  api.get_channels(function(success, channels)
+  get_api().get_channels(function(success, channels)
     if success then
       notify('UIからチャンネル一覧の取得に成功しました: ' .. #channels .. '件', vim.log.levels.INFO)
       M.show_channels(channels)
@@ -277,16 +281,16 @@ function M.show_channels(channels)
 
   -- スター付きチャンネルのIDを取得
   local starred_ids = {}
-  for id, _ in pairs(state.starred_channels) do
+  for id, _ in pairs(get_state().starred_channels) do
     starred_ids[id] = true
   end
 
   -- カスタムセクションの初期化
-  for id, section in pairs(state.custom_sections) do
+  for id, section in pairs(get_state().custom_sections) do
     custom_sections[id] = {
       name = section.name,
       channels = {},
-      is_collapsed = state.is_section_collapsed(id)
+      is_collapsed = get_state().is_section_collapsed(id)
     }
   end
 
@@ -298,7 +302,7 @@ function M.show_channels(channels)
     end
 
     -- カスタムセクションに属するチャンネル
-    local section_id = state.get_channel_section(channel.id)
+    local section_id = get_state().get_channel_section(channel.id)
     if section_id and custom_sections[section_id] then
       table.insert(custom_sections[section_id].channels, channel)
       goto continue
@@ -360,7 +364,7 @@ function M.show_channels(channels)
   local current_line = 0
 
   -- スター付きセクション
-  local starred_collapsed = state.is_section_collapsed('starred')
+  local starred_collapsed = get_state().is_section_collapsed('starred')
   table.insert(line_to_section, { line = current_line, id = 'starred', name = 'スター付き' })
   vim.api.nvim_buf_set_lines(M.layout.channels_buf, current_line, current_line + 1, false, {'▼ スター付き'})
   current_line = current_line + 1
@@ -396,7 +400,7 @@ function M.show_channels(channels)
   end
 
   -- チャンネルセクション
-  local channels_collapsed = state.is_section_collapsed('channels')
+  local channels_collapsed = get_state().is_section_collapsed('channels')
   table.insert(line_to_section, { line = current_line, id = 'channels', name = 'チャンネル' })
   vim.api.nvim_buf_set_lines(M.layout.channels_buf, current_line, current_line + 1, false, {(channels_collapsed and '▶' or '▼') .. ' チャンネル'})
   current_line = current_line + 1
@@ -411,7 +415,7 @@ function M.show_channels(channels)
 
   -- プライベートチャンネルセクション
   if #private_channels > 0 then
-    local private_collapsed = state.is_section_collapsed('private')
+    local private_collapsed = get_state().is_section_collapsed('private')
     table.insert(line_to_section, { line = current_line, id = 'private', name = 'プライベートチャンネル' })
     vim.api.nvim_buf_set_lines(M.layout.channels_buf, current_line, current_line + 1, false, {(private_collapsed and '▶' or '▼') .. ' プライベートチャンネル'})
     current_line = current_line + 1
@@ -427,7 +431,7 @@ function M.show_channels(channels)
 
   -- DMセクション
   if #direct_messages > 0 then
-    local dm_collapsed = state.is_section_collapsed('dm')
+    local dm_collapsed = get_state().is_section_collapsed('dm')
     table.insert(line_to_section, { line = current_line, id = 'dm', name = 'ダイレクトメッセージ' })
     vim.api.nvim_buf_set_lines(M.layout.channels_buf, current_line, current_line + 1, false, {(dm_collapsed and '▶' or '▼') .. ' ダイレクトメッセージ'})
     current_line = current_line + 1
@@ -444,7 +448,7 @@ function M.show_channels(channels)
 
   -- グループメッセージセクション
   if #group_messages > 0 then
-    local group_collapsed = state.is_section_collapsed('group')
+    local group_collapsed = get_state().is_section_collapsed('group')
     table.insert(line_to_section, { line = current_line, id = 'group', name = 'グループメッセージ' })
     vim.api.nvim_buf_set_lines(M.layout.channels_buf, current_line, current_line + 1, false, {(group_collapsed and '▶' or '▼') .. ' グループメッセージ'})
     current_line = current_line + 1
@@ -480,7 +484,7 @@ function M.highlight_current_channel()
   vim.api.nvim_buf_clear_namespace(M.layout.channels_buf, -1, 0, -1)
 
   -- 現在のチャンネルIDを取得
-  local current_channel_id = state.get_current_channel()
+  local current_channel_id = get_state().get_current_channel()
   if not current_channel_id then
     return
   end

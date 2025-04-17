@@ -1,11 +1,17 @@
 ---@brief [[
 --- neo-slack.nvim API ユーザーモジュール
 --- ユーザー情報の取得と管理を行います
+--- 改良版：依存性注入パターンを活用
 ---@brief ]]
 
-local utils = require('neo-slack.utils')
-local api_utils = require('neo-slack.api.utils')
-local events = require('neo-slack.core.events')
+-- 依存性注入コンテナ
+local dependency = require('neo-slack.core.dependency')
+
+-- 依存モジュールの取得用関数
+local function get_utils() return dependency.get('utils') end
+local function get_api_utils() return dependency.get('api.utils') end
+local function get_events() return dependency.get('core.events') end
+local function get_api_core() return dependency.get('api.core') end
 
 ---@class NeoSlackAPIUsers
 ---@field users_cache table ユーザー情報のキャッシュ
@@ -20,31 +26,22 @@ M.users_cache = {}
 ---@param opts table|nil 追加オプション
 ---@return nil
 local function notify(message, level, opts)
-  api_utils.notify(message, level, opts)
+  get_api_utils().notify(message, level, opts)
 end
 
--- APIコアモジュールへの参照を保持する変数
-local core
-
--- APIコアモジュールを取得する関数
-local function get_core()
-  if not core then
-    core = require('neo-slack.api.core')
-  end
-  return core
-end
+-- この関数は不要になりました（依存性注入で置き換え）
 
 --- ユーザー情報を取得（Promise版）
 --- @return table Promise
 function M.get_user_info_promise()
-  local promise = get_core().request_promise('GET', 'users.identity', {})
+  local promise = get_api_core().request_promise('GET', 'users.identity', {})
 
-  return utils.Promise.then_func(promise, function(data)
+  return get_utils().Promise.then_func(promise, function(data)
     -- ユーザー情報を保存
-    get_core().config.user_info = data
+    get_api_core().config.user_info = data
 
     -- ユーザー情報取得イベントを発行
-    events.emit('api:user_info_loaded', data)
+    get_events().emit('api:user_info_loaded', data)
 
     return data
   end)
@@ -53,7 +50,7 @@ end
 --- ユーザー情報を取得（コールバック版 - 後方互換性のため）
 --- @param callback function コールバック関数
 --- @return nil
-M.get_user_info = api_utils.create_callback_version(M.get_user_info_promise)
+M.get_user_info = get_api_utils().create_callback_version(M.get_user_info_promise)
 
 --- 特定のユーザーIDからユーザー情報を取得（Promise版）
 --- @param user_id string ユーザーID
@@ -61,7 +58,7 @@ M.get_user_info = api_utils.create_callback_version(M.get_user_info_promise)
 function M.get_user_info_by_id_promise(user_id)
   -- キャッシュにユーザー情報があれば、それを返す
   if M.users_cache[user_id] then
-    return utils.Promise.new(function(resolve)
+    return get_utils().Promise.new(function(resolve)
       resolve(M.users_cache[user_id])
     end)
   end
@@ -71,22 +68,22 @@ function M.get_user_info_by_id_promise(user_id)
     user = user_id
   }
 
-  local promise = get_core().request_promise('GET', 'users.info', params)
+  local promise = get_api_core().request_promise('GET', 'users.info', params)
 
-  return utils.Promise.catch_func(
-    utils.Promise.then_func(promise, function(data)
+  return get_utils().Promise.catch_func(
+    get_utils().Promise.then_func(promise, function(data)
       -- キャッシュに保存
       M.users_cache[user_id] = data.user
 
       -- ユーザー情報取得イベントを発行
-      events.emit('api:user_info_by_id_loaded', user_id, data.user)
+      get_events().emit('api:user_info_by_id_loaded', user_id, data.user)
 
       return data.user
     end),
     function(err)
       local error_msg = err.error or 'Unknown error'
       notify('ユーザー情報の取得に失敗しました - ' .. error_msg, vim.log.levels.WARN)
-      return utils.Promise.reject(err)
+      return get_utils().Promise.reject(err)
     end
   )
 end
@@ -95,7 +92,7 @@ end
 --- @param user_id string ユーザーID
 --- @param callback function コールバック関数
 --- @return nil
-M.get_user_info_by_id = api_utils.create_callback_version(M.get_user_info_by_id_promise)
+M.get_user_info_by_id = get_api_utils().create_callback_version(M.get_user_info_by_id_promise)
 
 --- ユーザーIDからユーザー名を取得（Promise版）
 --- @param user_id string ユーザーID
@@ -103,8 +100,8 @@ M.get_user_info_by_id = api_utils.create_callback_version(M.get_user_info_by_id_
 function M.get_username_promise(user_id)
   local promise = M.get_user_info_by_id_promise(user_id)
 
-  return utils.Promise.catch_func(
-    utils.Promise.then_func(promise, function(user_data)
+  return get_utils().Promise.catch_func(
+    get_utils().Promise.then_func(promise, function(user_data)
       local display_name = user_data.profile.display_name
       local real_name = user_data.profile.real_name
 
@@ -127,7 +124,7 @@ end
 function M.get_username(user_id, callback)
   local promise = M.get_username_promise(user_id)
 
-  utils.Promise.then_func(promise, function(username)
+  get_utils().Promise.then_func(promise, function(username)
     vim.schedule(function()
       callback(username)
     end)

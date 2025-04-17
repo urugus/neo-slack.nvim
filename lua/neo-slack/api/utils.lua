@@ -12,6 +12,7 @@ local dependency = require('neo-slack.core.dependency')
 
 -- 依存モジュールの取得用関数
 local function get_utils() return dependency.get('utils') end
+local function get_errors() return dependency.get('core.errors') end
 
 ---@class NeoSlackAPIUtils
 local M = {}
@@ -79,13 +80,19 @@ end
 function M.request_promise(method, endpoint, params, options, token, base_url)
   params = params or {}
   options = options or {}
+  local errors = get_errors()
 
   M.notify('APIリクエスト: ' .. method .. ' ' .. endpoint, vim.log.levels.INFO)
 
   if not token or token == '' then
-    M.notify('APIトークンが設定されていません', vim.log.levels.ERROR)
+    local error_obj = errors.create_error(
+      errors.error_types.AUTH,
+      'APIトークンが設定されていません',
+      { endpoint = endpoint }
+    )
+    errors.handle_error(error_obj)
     return get_utils().Promise.new(function(_, reject)
-      reject({ error = 'APIトークンが設定されていません' })
+      reject(error_obj)
     end)
   end
 
@@ -101,21 +108,47 @@ function M.request_promise(method, endpoint, params, options, token, base_url)
       headers = headers,
       callback = function(response)
         if response.status ~= 200 then
-          M.notify('HTTPエラー: ' .. response.status, vim.log.levels.ERROR)
-          reject({ error = 'HTTP error: ' .. response.status, status = response.status })
+          local error_obj = errors.create_error(
+            errors.error_types.NETWORK,
+            'HTTPエラー: ' .. response.status,
+            {
+              endpoint = endpoint,
+              status = response.status,
+              method = method
+            }
+          )
+          errors.handle_error(error_obj)
+          reject(error_obj)
           return
         end
 
         local success, data = pcall(json.decode, response.body)
         if not success then
-          M.notify('JSONパースエラー: ' .. data, vim.log.levels.ERROR)
-          reject({ error = 'JSON parse error: ' .. data })
+          local error_obj = errors.create_error(
+            errors.error_types.API,
+            'JSONパースエラー: ' .. data,
+            {
+              endpoint = endpoint,
+              body = response.body:sub(1, 100) -- 最初の100文字だけ保存
+            }
+          )
+          errors.handle_error(error_obj)
+          reject(error_obj)
           return
         end
 
         if not data.ok then
-          M.notify('APIエラー: ' .. (data.error or 'Unknown API error'), vim.log.levels.ERROR)
-          reject({ error = data.error or 'Unknown API error', data = data })
+          local error_obj = errors.create_error(
+            errors.error_types.API,
+            'APIエラー: ' .. (data.error or 'Unknown API error'),
+            {
+              endpoint = endpoint,
+              error_code = data.error,
+              data = data
+            }
+          )
+          errors.handle_error(error_obj)
+          reject(error_obj)
           return
         end
 

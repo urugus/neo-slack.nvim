@@ -11,6 +11,7 @@ local dependency
 ---@field async boolean|nil 非同期で実行するかどうか
 ---@field namespace string|nil イベントの名前空間
 ---@field log_level number|nil ログレベル
+---@field error_type string|nil エラー発生時のエラータイプ
 
 ---@class EventSubscription
 ---@field event string イベント名
@@ -38,13 +39,22 @@ local function init_dependencies()
   end
 end
 
+-- 依存モジュールの取得用関数
+local function get_utils()
+  init_dependencies()
+  return dependency.get('utils')
+end
+
+local function get_errors()
+  init_dependencies()
+  return dependency.get('core.errors')
+end
+
 -- ログヘルパー関数
 ---@param message string ログメッセージ
 ---@param level number|nil ログレベル
 local function log(message, level)
-  init_dependencies()
-  local utils = dependency.get('utils')
-  utils.notify(message, level or vim.log.levels.DEBUG, { prefix = 'Events: ' })
+  get_utils().notify(message, level or vim.log.levels.DEBUG, { prefix = 'Events: ' })
 end
 
 --- イベントリスナーを登録
@@ -170,16 +180,40 @@ function M.emit(event, ...)
           -- エラーハンドリング
           local success, err = pcall(callback, unpack(args))
           if not success then
-            local log_level = options.log_level or vim.log.levels.ERROR
-            log('非同期イベントハンドラでエラーが発生しました (' .. full_event .. '): ' .. tostring(err), log_level)
+            local errors = get_errors()
+            local error_type = options.error_type or errors.error_types.INTERNAL
+            local error_obj = errors.create_error(
+              error_type,
+              '非同期イベントハンドラでエラーが発生しました (' .. full_event .. '): ' .. tostring(err),
+              {
+                event = full_event,
+                error = err,
+                args = vim.inspect(args):sub(1, 100) -- 引数の最初の100文字だけ保存
+              }
+            )
+
+            local log_level = options.log_level or errors.level_map[error_type]
+            errors.handle_error(error_obj, nil, nil, log_level, { prefix = 'Events: ' })
           end
         end, 0)
       else
         -- 同期実行
         local success, err = pcall(callback, unpack(args))
         if not success then
-          local log_level = options.log_level or vim.log.levels.ERROR
-          log('イベントハンドラでエラーが発生しました (' .. full_event .. '): ' .. tostring(err), log_level)
+          local errors = get_errors()
+          local error_type = options.error_type or errors.error_types.INTERNAL
+          local error_obj = errors.create_error(
+            error_type,
+            'イベントハンドラでエラーが発生しました (' .. full_event .. '): ' .. tostring(err),
+            {
+              event = full_event,
+              error = err,
+              args = vim.inspect(args):sub(1, 100) -- 引数の最初の100文字だけ保存
+            }
+          )
+
+          local log_level = options.log_level or errors.level_map[error_type]
+          errors.handle_error(error_obj, nil, nil, log_level, { prefix = 'Events: ' })
         end
       end
     end

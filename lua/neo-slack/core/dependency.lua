@@ -38,44 +38,73 @@ function M.get(name)
 
   -- ファクトリー関数が登録されている場合は実行してインスタンスを生成
   if M.factories[name] then
-    local instance = M.factories[name]()
-    M.container[name] = instance
-    return instance
+    local success, instance_or_error = pcall(M.factories[name])
+    if success then
+      M.container[name] = instance_or_error
+      return instance_or_error
+    else
+      -- エラーハンドリング（core.errorsモジュールがまだ利用できない可能性があるため、基本的なエラー処理を行う）
+      local error_message = '依存関係の初期化に失敗しました: ' .. name .. ' - ' .. tostring(instance_or_error)
+      vim.notify(error_message, vim.log.levels.ERROR, { title = 'Dependency Error' })
+      error(error_message)
+    end
   end
 
   -- 通常のrequireを試みる
-  local success, module = pcall(require, 'neo-slack.' .. name)
+  local success, module_or_error = pcall(require, 'neo-slack.' .. name)
   if success then
-    M.container[name] = module
-    return module
+    M.container[name] = module_or_error
+    return module_or_error
   end
 
-  error('依存関係が見つかりません: ' .. name)
+  -- エラーハンドリング
+  local error_message = '依存関係が見つかりません: ' .. name .. ' - ' .. tostring(module_or_error)
+  vim.notify(error_message, vim.log.levels.ERROR, { title = 'Dependency Error' })
+  error(error_message)
 end
 
 --- 全ての依存関係を初期化
----@return nil
+---@return boolean 初期化に成功したかどうか
 function M.initialize()
+  local success = true
+
+  -- 初期化関数
+  local function init_module(name, module_path)
+    local ok, result = pcall(function()
+      M.register_factory(name, function() return require(module_path) end)
+    end)
+
+    if not ok then
+      vim.notify('モジュールの登録に失敗しました: ' .. name .. ' - ' .. tostring(result), vim.log.levels.ERROR)
+      success = false
+    end
+
+    return ok
+  end
+
   -- コアモジュールの登録
-  M.register_factory('core.config', function() return require('neo-slack.core.config') end)
-  M.register_factory('core.events', function() return require('neo-slack.core.events') end)
-  M.register_factory('utils', function() return require('neo-slack.utils') end)
-  M.register_factory('state', function() return require('neo-slack.state') end)
-  M.register_factory('storage', function() return require('neo-slack.storage') end)
+  init_module('core.config', 'neo-slack.core.config')
+  init_module('core.events', 'neo-slack.core.events')
+  init_module('core.errors', 'neo-slack.core.errors')
+  init_module('utils', 'neo-slack.utils')
+  init_module('state', 'neo-slack.state')
+  init_module('storage', 'neo-slack.storage')
 
   -- APIモジュールの登録
-  M.register_factory('api', function() return require('neo-slack.api.init') end)
-  M.register_factory('api.core', function() return require('neo-slack.api.core') end)
-  M.register_factory('api.utils', function() return require('neo-slack.api.utils') end)
-  M.register_factory('api.channels', function() return require('neo-slack.api.channels') end)
-  M.register_factory('api.messages', function() return require('neo-slack.api.messages') end)
-  M.register_factory('api.reactions', function() return require('neo-slack.api.reactions') end)
-  M.register_factory('api.files', function() return require('neo-slack.api.files') end)
-  M.register_factory('api.users', function() return require('neo-slack.api.users') end)
+  init_module('api', 'neo-slack.api.init')
+  init_module('api.core', 'neo-slack.api.core')
+  init_module('api.utils', 'neo-slack.api.utils')
+  init_module('api.channels', 'neo-slack.api.channels')
+  init_module('api.messages', 'neo-slack.api.messages')
+  init_module('api.reactions', 'neo-slack.api.reactions')
+  init_module('api.files', 'neo-slack.api.files')
+  init_module('api.users', 'neo-slack.api.users')
 
   -- 機能モジュールの登録
-  M.register_factory('ui', function() return require('neo-slack.ui') end)
-  M.register_factory('notification', function() return require('neo-slack.notification') end)
+  init_module('ui', 'neo-slack.ui')
+  init_module('notification', 'neo-slack.notification')
+
+  return success
 end
 
 return M
