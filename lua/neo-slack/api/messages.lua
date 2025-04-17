@@ -48,6 +48,21 @@ function M.get_messages_promise(channel, options)
     -- 2番目のPromise: メッセージを取得
     local request_promise = get_api_core().request_promise('GET', 'conversations.history', params)
     return get_utils().Promise.then_func(request_promise, function(data)
+      -- デバッグ情報を追加
+      notify('APIレスポンス: ' .. vim.inspect(data), vim.log.levels.INFO)
+
+      -- messagesフィールドの確認
+      if not data.messages then
+        notify('messagesフィールドがありません', vim.log.levels.ERROR)
+        return {}
+      end
+
+      if #data.messages == 0 then
+        notify('メッセージが0件です', vim.log.levels.INFO)
+      else
+        notify('メッセージ件数: ' .. #data.messages, vim.log.levels.INFO)
+      end
+
       -- メッセージ一覧取得イベントを発行
       get_events().emit('api:messages_loaded', channel_id, data.messages)
 

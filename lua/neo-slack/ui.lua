@@ -667,12 +667,34 @@ function M.show_messages(channel, messages)
     local user_id = message.user
 
     -- ユーザー名を取得（非同期処理）
-    get_api().get_user_info_by_id(user_id, function(success, user_data)
-      if success and user_data then
-        -- メッセージの表示処理
-        -- ここに必要なコードを追加
-      end
-    end)
+    -- 既にユーザー情報を取得しているので、この非同期処理は不要
+    -- 代わりに、ユーザー情報が取得できなかった場合のみ非同期で取得を試みる
+    if not user_data then
+      get_api().get_user_info_by_id(user_id, function(success, user_data)
+        if success and user_data then
+          -- ユーザー情報をキャッシュに保存
+          get_state().set_user_cache(user_id, user_data)
+        end
+      end)
+    end
+
+    -- ユーザー名を取得（同期的に処理）
+    local user_name = "unknown"
+    local user_data = get_state().get_user_by_id(user_id)
+    if user_data then
+      local display_name = user_data.profile.display_name
+      local real_name = user_data.profile.real_name
+      user_name = (display_name and display_name ~= '') and display_name or real_name
+    end
+
+    -- タイムスタンプをフォーマット
+    local timestamp = os.date("%Y-%m-%d %H:%M:%S", tonumber(message.ts))
+
+    -- メッセージヘッダーを表示（ユーザー名とタイムスタンプ）
+    local header = user_name .. " (" .. timestamp .. ")"
+    vim.api.nvim_buf_set_lines(M.layout.messages_buf, current_line, current_line + 1, false, {header})
+    line_to_message[current_line] = message
+    current_line = current_line + 1
 
     -- メッセージ内容を表示
     local text = message.text or "(内容なし)"
@@ -680,7 +702,7 @@ function M.show_messages(channel, messages)
 
     -- メッセージ行を追加
     for _, line in ipairs(lines) do
-      vim.api.nvim_buf_set_lines(M.layout.messages_buf, current_line, current_line + 1, false, {line})
+      vim.api.nvim_buf_set_lines(M.layout.messages_buf, current_line, current_line + 1, false, {"  " .. line})
       line_to_message[current_line] = message
       current_line = current_line + 1
     end

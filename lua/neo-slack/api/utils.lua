@@ -153,6 +153,21 @@ function M.request_promise(method, endpoint, params, options, token, base_url)
         end
 
         M.notify('APIリクエスト成功: ' .. endpoint, vim.log.levels.INFO)
+
+        -- デバッグ情報を追加
+        if endpoint == 'conversations.history' then
+          M.notify('conversations.history レスポンス: ' .. vim.inspect(data), vim.log.levels.INFO)
+
+          -- messagesフィールドの確認
+          if not data.messages then
+            M.notify('conversations.history: messagesフィールドがありません', vim.log.levels.ERROR)
+          elseif #data.messages == 0 then
+            M.notify('conversations.history: メッセージが0件です', vim.log.levels.INFO)
+          else
+            M.notify('conversations.history: メッセージ件数: ' .. #data.messages, vim.log.levels.INFO)
+          end
+        end
+
         resolve(data)
       end
     }
