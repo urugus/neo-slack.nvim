@@ -340,7 +340,7 @@ function M.show_channels(channels)
   -- DMとグループメッセージは特別な処理が必要
   for _, dm in ipairs(direct_messages) do
     -- ユーザー名を取得
-    api.get_user_info_by_id(dm.user, function(success, user_data)
+    get_api().get_user_info_by_id(dm.user, function(success, user_data)
       if success and user_data then
         -- DMの名前をユーザー名に設定
         local display_name = user_data.profile.display_name
@@ -560,11 +560,12 @@ function M.toggle_section()
   end
 
   -- 折りたたみ状態を切り替え
-  local is_collapsed = state.is_section_collapsed(section_info.id)
-  state.set_section_collapsed(section_info.id, not is_collapsed)
+  local state_module = get_state()
+  local is_collapsed = state_module.is_section_collapsed(section_info.id)
+  state_module.set_section_collapsed(section_info.id, not is_collapsed)
 
   -- 状態を保存
-  state.save_section_collapsed()
+  state_module.save_section_collapsed()
 
   -- チャンネル一覧を再表示
   M.refresh_channels()
@@ -587,11 +588,12 @@ function M.toggle_star_channel()
   end
 
   -- スター付き状態を切り替え
-  local is_starred = state.is_channel_starred(channel_id)
-  state.set_channel_starred(channel_id, not is_starred)
+  local state_module = get_state()
+  local is_starred = state_module.is_channel_starred(channel_id)
+  state_module.set_channel_starred(channel_id, not is_starred)
 
   -- 状態を保存
-  state.save_starred_channels()
+  state_module.save_starred_channels()
 
   -- チャンネル一覧を再表示
   M.refresh_channels()
@@ -599,7 +601,7 @@ end
 
 -- チャンネル一覧を更新
 function M.refresh_channels()
-  api.get_channels(function(success, channels)
+  get_api().get_channels(function(success, channels)
     if success then
       M.show_channels(channels)
     else
@@ -621,7 +623,7 @@ function M.show_messages(channel, messages)
   local channel_name = channel
 
   -- チャンネルオブジェクトを検索
-  for _, ch in ipairs(state.get_channels()) do
+  for _, ch in ipairs(get_state().get_channels()) do
     if ch.id == channel or ch.name == channel then
       channel_id = ch.id
       channel_name = ch.name or ch.id
@@ -665,7 +667,7 @@ function M.show_messages(channel, messages)
     local user_id = message.user
 
     -- ユーザー名を取得（非同期処理）
-    api.get_user_info_by_id(user_id, function(success, user_data)
+    get_api().get_user_info_by_id(user_id, function(success, user_data)
       if success and user_data then
         -- メッセージの表示処理
         -- ここに必要なコードを追加
@@ -674,7 +676,7 @@ function M.show_messages(channel, messages)
 
     -- メッセージ内容を表示
     local text = message.text or "(内容なし)"
-    local lines = utils.split_lines(text)
+    local lines = get_utils().split_lines(text)
 
     -- メッセージ行を追加
     for _, line in ipairs(lines) do
