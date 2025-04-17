@@ -58,11 +58,11 @@ end
 ---@param level number|nil 通知レベル（省略時はエラータイプに基づく）
 ---@param opts table|nil 通知オプション
 ---@return table 処理されたエラーオブジェクト
-function M.handle_error(err, type, details, level, opts)
+function M.handle_error(err, error_type, details, level, opts)
   -- エラーオブジェクトを作成または変換
   local error_obj
   if type(err) == 'string' then
-    error_obj = M.create_error(type or M.error_types.UNKNOWN, err, details)
+    error_obj = M.create_error(error_type or M.error_types.UNKNOWN, err, details)
   elseif type(err) == 'table' and err.type and err.message then
     error_obj = err
   else
