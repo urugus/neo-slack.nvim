@@ -663,35 +663,65 @@ function M.show_messages(channel, messages)
 
   -- メッセージを表示
   for _, message in ipairs(messages) do
-    -- ユーザー情報を取得
-    local user_id = message.user
+    -- デバッグ情報を追加
+    notify('メッセージ情報: ' .. vim.inspect(message), vim.log.levels.DEBUG)
 
-    -- ユーザー名を取得（非同期処理）
-    -- 既にユーザー情報を取得しているので、この非同期処理は不要
-    -- 代わりに、ユーザー情報が取得できなかった場合のみ非同期で取得を試みる
-    if not user_data then
-      get_api().get_user_info_by_id(user_id, function(success, user_data)
-        if success and user_data then
-          -- ユーザー情報をキャッシュに保存
-          get_state().set_user_cache(user_id, user_data)
+    -- メッセージの種類を判断
+    local is_system_message = message.subtype ~= nil
+    local header_prefix = ""
+
+    -- ユーザー名を取得
+    local user_name = "System"  -- デフォルトはシステムメッセージとして扱う
+
+    -- 通常のユーザーメッセージの場合
+    if not is_system_message and message.user then
+      local user_id = message.user
+
+      -- ユーザー名を取得（同期的に処理）
+      user_name = "unknown"
+      local user_data = get_state().get_user_by_id(user_id)
+      if user_data then
+        local display_name = user_data.profile.display_name
+        local real_name = user_data.profile.real_name
+        user_name = (display_name and display_name ~= '') and display_name or real_name
+      end
+
+      -- ユーザー情報が取得できなかった場合のみ非同期で取得を試みる
+      if not user_data and user_id then
+        get_api().get_user_info_by_id(user_id, function(success, user_data)
+          if success and user_data then
+            -- ユーザー情報をキャッシュに保存
+            get_state().set_user_cache(user_id, user_data)
+          end
+        end)
+      end
+    else
+      -- システムメッセージの場合、subtypeに応じた表示にする
+      if message.subtype == "channel_join" then
+        header_prefix = "[参加] "
+      elseif message.subtype == "channel_leave" then
+        header_prefix = "[退出] "
+      elseif message.subtype == "channel_topic" then
+        header_prefix = "[トピック変更] "
+      elseif message.subtype == "channel_purpose" then
+        header_prefix = "[目的変更] "
+      elseif message.subtype == "channel_name" then
+        header_prefix = "[名前変更] "
+      elseif message.subtype == "bot_message" then
+        user_name = "Bot"
+        if message.username then
+          user_name = message.username
         end
-      end)
-    end
-
-    -- ユーザー名を取得（同期的に処理）
-    local user_name = "unknown"
-    local user_data = get_state().get_user_by_id(user_id)
-    if user_data then
-      local display_name = user_data.profile.display_name
-      local real_name = user_data.profile.real_name
-      user_name = (display_name and display_name ~= '') and display_name or real_name
+      else
+        header_prefix = "[" .. (message.subtype or "system") .. "] "
+      end
     end
 
     -- タイムスタンプをフォーマット
     local timestamp = os.date("%Y-%m-%d %H:%M:%S", tonumber(message.ts))
 
     -- メッセージヘッダーを表示（ユーザー名とタイムスタンプ）
-    local header = user_name .. " (" .. timestamp .. ")"
+    local header = header_prefix .. user_name .. " (" .. timestamp .. ")"
     vim.api.nvim_buf_set_lines(M.layout.messages_buf, current_line, current_line + 1, false, {header})
     line_to_message[current_line] = message
     current_line = current_line + 1
