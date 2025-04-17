@@ -525,7 +525,7 @@ function M.select_channel()
 
   -- チャンネル名を取得
   local channel_name
-  for _, channel in ipairs(state.get_channels()) do
+  for _, channel in ipairs(get_state().get_channels()) do
     if channel.id == channel_id then
       channel_name = channel.name
       break
@@ -533,7 +533,7 @@ function M.select_channel()
   end
 
   -- チャンネル選択イベントを発行
-  events.emit('channel_selected', channel_id, channel_name)
+  get_events().emit('channel_selected', channel_id, channel_name)
 end
 
 -- セクションの折りたたみ/展開を切り替え
