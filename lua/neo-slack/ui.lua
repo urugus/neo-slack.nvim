@@ -616,6 +616,23 @@ end
 function M.show_messages(channel, messages)
   notify('show_messages関数が呼び出されました: channel=' .. tostring(channel) .. ', messages=' .. tostring(messages and #messages or 0) .. '件', vim.log.levels.INFO)
 
+  -- messagesの型を確認
+  notify('messagesの型: ' .. type(messages), vim.log.levels.INFO)
+
+  -- messagesが配列の場合、その内容を確認
+  if type(messages) == 'table' then
+    notify('messagesの内容: ' .. vim.inspect(messages):sub(1, 100) .. '...', vim.log.levels.INFO)
+
+    -- messagesの各要素の型を確認
+    for i, msg in ipairs(messages) do
+      notify('messages[' .. i .. ']の型: ' .. type(msg), vim.log.levels.INFO)
+      if i >= 3 then break end -- 最初の3つだけ確認
+    end
+
+    -- #messagesの値を確認
+    notify('#messagesの値: ' .. #messages, vim.log.levels.INFO)
+  end
+
   if not M.layout.messages_buf or not vim.api.nvim_buf_is_valid(M.layout.messages_buf) then
     notify('メッセージバッファが無効です', vim.log.levels.ERROR)
     return
@@ -642,10 +659,18 @@ function M.show_messages(channel, messages)
   end
 
   -- メッセージがない場合
-  if not messages or #messages == 0 then
-    notify('メッセージがありません', vim.log.levels.INFO)
+  if not messages then
+    notify('messagesがnilです', vim.log.levels.ERROR)
     vim.api.nvim_buf_set_option(M.layout.messages_buf, 'modifiable', true)
-    vim.api.nvim_buf_set_lines(M.layout.messages_buf, 0, -1, false, {'メッセージがありません'})
+    vim.api.nvim_buf_set_lines(M.layout.messages_buf, 0, -1, false, {'メッセージがありません (nil)'})
+    vim.api.nvim_buf_set_option(M.layout.messages_buf, 'modifiable', false)
+    return
+  end
+
+  if #messages == 0 then
+    notify('messagesが空の配列です', vim.log.levels.INFO)
+    vim.api.nvim_buf_set_option(M.layout.messages_buf, 'modifiable', true)
+    vim.api.nvim_buf_set_lines(M.layout.messages_buf, 0, -1, false, {'メッセージがありません (空の配列)'})
     vim.api.nvim_buf_set_option(M.layout.messages_buf, 'modifiable', false)
     return
   end
