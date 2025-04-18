@@ -731,10 +731,15 @@ function M.show_messages(channel, messages)
 
     -- リッチテキスト形式のメッセージの場合、特殊な処理を行う
     if message.blocks then
+      -- デバッグ情報を追加
+      notify('メッセージにblocksフィールドがあります: ' .. vim.inspect(message.blocks), vim.log.levels.DEBUG)
+
       -- リッチテキストの内容を取得
       local rich_text = ""
+
       for _, block in ipairs(message.blocks) do
-        if block.type == "rich_text" then
+        -- タイプ1: block.type == "rich_text"の場合
+        if block.type == "rich_text" and block.elements then
           for _, element in ipairs(block.elements) do
             if element.type == "rich_text_section" then
               for _, sub_element in ipairs(element.elements) do
@@ -752,12 +757,19 @@ function M.show_messages(channel, messages)
               end
             end
           end
+        -- タイプ2: block.textがオブジェクトの場合
+        elseif block.text and type(block.text) == "table" and block.text.text then
+          rich_text = rich_text .. block.text.text
+        -- タイプ3: block.textが文字列の場合
+        elseif block.text and type(block.text) == "string" then
+          rich_text = rich_text .. block.text
         end
       end
 
       -- リッチテキストがある場合は、それを表示する
       if rich_text ~= "" then
         text = rich_text
+        notify('リッチテキストを抽出しました: ' .. text:sub(1, 100) .. '...', vim.log.levels.DEBUG)
       end
     end
 
