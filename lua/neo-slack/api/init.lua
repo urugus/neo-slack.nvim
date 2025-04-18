@@ -3,27 +3,29 @@
 --- Slack APIとの通信を処理します
 ---@brief ]]
 
-local utils = require('neo-slack.utils')
-local events = require('neo-slack.core.events')
+-- 依存性注入コンテナ
+local dependency = require('neo-slack.core.dependency')
+
+-- 依存モジュールの取得用関数
+local function get_utils() return dependency.get('utils') end
+local function get_events() return dependency.get('core.events') end
+local function get_core() return dependency.get('api.core') end
+local function get_users() return dependency.get('api.users') end
+local function get_channels() return dependency.get('api.channels') end
+local function get_messages() return dependency.get('api.messages') end
+local function get_reactions() return dependency.get('api.reactions') end
+local function get_files() return dependency.get('api.files') end
 
 ---@class NeoSlackAPI
 ---@field config APIConfig API設定
 ---@field users_cache table ユーザー情報のキャッシュ
 local M = {}
 
--- サブモジュールを読み込む
-local core = require('neo-slack.api.core')
-local users = require('neo-slack.api.users')
-local channels = require('neo-slack.api.channels')
-local messages = require('neo-slack.api.messages')
-local reactions = require('neo-slack.api.reactions')
-local files = require('neo-slack.api.files')
-
 -- APIコア設定をエクスポート
-M.config = core.config
+M.config = get_core().config
 
 -- ユーザーキャッシュをエクスポート
-M.users_cache = users.users_cache
+M.users_cache = get_users().users_cache
 
 --------------------------------------------------
 -- API初期化関連の関数
@@ -34,16 +36,16 @@ M.users_cache = users.users_cache
 --- @return nil
 function M.setup(token)
   -- コアモジュールの初期化
-  core.setup(token)
-  
+  get_core().setup(token)
+
   -- チーム情報を取得
   M.get_team_info(function(success, data)
     if success and data and data.team then
       M.config.team_info = data
-      utils.notify(data.team.name .. 'に接続しました', vim.log.levels.INFO, { prefix = 'API: ' })
+      get_utils().notify(data.team.name .. 'に接続しました', vim.log.levels.INFO, { prefix = 'API: ' })
     end
   end)
-  
+
   -- ユーザー情報を取得
   M.get_user_info(function(success, data)
     if success then
@@ -57,83 +59,83 @@ end
 --------------------------------------------------
 
 -- APIリクエスト関数
-M.request_promise = core.request_promise
-M.request = core.request
+M.request_promise = function(...) return get_core().request_promise(...) end
+M.request = function(...) return get_core().request(...) end
 
 -- 接続テスト関数
-M.test_connection_promise = core.test_connection_promise
-M.test_connection = core.test_connection
+M.test_connection_promise = function(...) return get_core().test_connection_promise(...) end
+M.test_connection = function(...) return get_core().test_connection(...) end
 
 -- チーム情報取得関数
-M.get_team_info_promise = core.get_team_info_promise
-M.get_team_info = core.get_team_info
+M.get_team_info_promise = function(...) return get_core().get_team_info_promise(...) end
+M.get_team_info = function(...) return get_core().get_team_info(...) end
 
 --------------------------------------------------
 -- ユーザーモジュールの関数をエクスポート
 --------------------------------------------------
 
 -- ユーザー情報取得関数
-M.get_user_info_promise = users.get_user_info_promise
-M.get_user_info = users.get_user_info
+M.get_user_info_promise = function(...) return get_users().get_user_info_promise(...) end
+M.get_user_info = function(...) return get_users().get_user_info(...) end
 
 -- ユーザーID情報取得関数
-M.get_user_info_by_id_promise = users.get_user_info_by_id_promise
-M.get_user_info_by_id = users.get_user_info_by_id
+M.get_user_info_by_id_promise = function(...) return get_users().get_user_info_by_id_promise(...) end
+M.get_user_info_by_id = function(...) return get_users().get_user_info_by_id(...) end
 
 -- ユーザー名取得関数
-M.get_username_promise = users.get_username_promise
-M.get_username = users.get_username
+M.get_username_promise = function(...) return get_users().get_username_promise(...) end
+M.get_username = function(...) return get_users().get_username(...) end
 
 --------------------------------------------------
 -- チャンネルモジュールの関数をエクスポート
 --------------------------------------------------
 
 -- チャンネル一覧取得関数
-M.get_channels_promise = channels.get_channels_promise
-M.get_channels = channels.get_channels
+M.get_channels_promise = function(...) return get_channels().get_channels_promise(...) end
+M.get_channels = function(...) return get_channels().get_channels(...) end
 
 -- チャンネルID取得関数
-M.get_channel_id_promise = channels.get_channel_id_promise
-M.get_channel_id = channels.get_channel_id
+M.get_channel_id_promise = function(...) return get_channels().get_channel_id_promise(...) end
+M.get_channel_id = function(...) return get_channels().get_channel_id(...) end
 
 --------------------------------------------------
 -- メッセージモジュールの関数をエクスポート
 --------------------------------------------------
 
 -- メッセージ一覧取得関数
-M.get_messages_promise = messages.get_messages_promise
-M.get_messages = messages.get_messages
+M.get_messages_promise = function(...) return get_messages().get_messages_promise(...) end
+M.get_messages = function(...) return get_messages().get_messages(...) end
 
 -- スレッド返信取得関数
-M.get_thread_replies_promise = messages.get_thread_replies_promise
-M.get_thread_replies = messages.get_thread_replies
+M.get_thread_replies_promise = function(...) return get_messages().get_thread_replies_promise(...) end
+M.get_thread_replies = function(...) return get_messages().get_thread_replies(...) end
 
 -- メッセージ送信関数
-M.send_message_promise = messages.send_message_promise
-M.send_message = messages.send_message
+M.send_message_promise = function(...) return get_messages().send_message_promise(...) end
+M.send_message = function(...) return get_messages().send_message(...) end
 
 -- メッセージ返信関数
-M.reply_message_promise = messages.reply_message_promise
-M.reply_message = messages.reply_message
+M.reply_message_promise = function(...) return get_messages().reply_message_promise(...) end
+M.reply_message = function(...) return get_messages().reply_message(...) end
 
 --------------------------------------------------
 -- リアクションモジュールの関数をエクスポート
 --------------------------------------------------
 
 -- リアクション追加関数
-M.add_reaction_promise = reactions.add_reaction_promise
-M.add_reaction = reactions.add_reaction
+M.add_reaction_promise = function(...) return get_reactions().add_reaction_promise(...) end
+M.add_reaction = function(...) return get_reactions().add_reaction(...) end
 
 --------------------------------------------------
 -- ファイルモジュールの関数をエクスポート
 --------------------------------------------------
 
 -- ファイルアップロード関数
-M.upload_file_promise = files.upload_file_promise
-M.upload_file = files.upload_file
+M.upload_file_promise = function(...) return get_files().upload_file_promise(...) end
+M.upload_file = function(...) return get_files().upload_file(...) end
 
 -- 現在のチャンネルIDを要求するイベントのハンドラを登録
-events.on('api:get_current_channel', function()
+get_events().on('api:get_current_channel', function()
   -- 現在のチャンネルIDを返すイベントを発行
   -- 実際の処理はstate.luaで行われる
 end)
