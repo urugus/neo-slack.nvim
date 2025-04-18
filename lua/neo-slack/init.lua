@@ -322,13 +322,35 @@ function M.list_messages(channel)
   local channel_id, channel_name = get_state().get_current_channel()
   channel = channel or channel_id or get_config().get('default_channel')
 
+  notify('list_messages関数が呼び出されました: channel=' .. tostring(channel), vim.log.levels.INFO)
+
   get_api().get_messages(channel, function(success, messages)
+    notify('get_messages コールバックが呼び出されました: success=' .. tostring(success) .. ', messages=' .. tostring(messages and #messages or 0) .. '件', vim.log.levels.INFO)
+
+    -- messagesの型を確認
+    notify('messagesの型: ' .. type(messages), vim.log.levels.INFO)
+
+    -- messagesが配列の場合、その内容を確認
+    if type(messages) == 'table' then
+      notify('messagesの内容: ' .. vim.inspect(messages):sub(1, 100) .. '...', vim.log.levels.INFO)
+
+      -- messagesの各要素の型を確認
+      for i, msg in ipairs(messages) do
+        notify('messages[' .. i .. ']の型: ' .. type(msg), vim.log.levels.INFO)
+        if i >= 3 then break end -- 最初の3つだけ確認
+      end
+
+      -- #messagesの値を確認
+      notify('#messagesの値: ' .. #messages, vim.log.levels.INFO)
+    end
+
     if success then
       -- 状態にメッセージを保存
       if type(channel) == 'string' then
         get_state().set_messages(channel, messages)
       end
       -- UIにメッセージを表示
+      notify('UIにメッセージを表示します: channel=' .. tostring(channel) .. ', messages=' .. tostring(messages and #messages or 0) .. '件', vim.log.levels.INFO)
       get_ui().show_messages(channel, messages)
     else
       notify('メッセージの取得に失敗しました', vim.log.levels.ERROR)
