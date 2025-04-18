@@ -87,11 +87,13 @@ function M.get_messages(channel, callback, options)
   local promise = M.get_messages_promise(channel, options)
 
   -- Promiseが解決されるのを待ってからコールバックを呼び出す
-  promise:then(function(messages)
+  get_utils().Promise.then_func(promise, function(messages)
     vim.schedule(function()
       callback(true, messages)
     end)
-  end):catch(function(err)
+  end)
+
+  get_utils().Promise.catch_func(promise, function(err)
     vim.schedule(function()
       callback(false, err)
     end)
