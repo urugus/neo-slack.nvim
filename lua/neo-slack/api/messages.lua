@@ -87,18 +87,20 @@ function M.get_messages(channel, callback, options)
   local promise = M.get_messages_promise(channel, options)
 
   -- Promiseが解決されるのを待ってからコールバックを呼び出す
-  -- 修正: then_funcの代わりにthenメソッドを直接使用
-  promise:then(function(messages)
-    vim.schedule(function()
-      -- デバッグ情報を追加
-      notify('コールバック実行: メッセージ件数=' .. #messages, vim.log.levels.INFO)
-      callback(true, messages)
-    end)
-  end):catch(function(err)
-    vim.schedule(function()
-      callback(false, err)
-    end)
-  end)
+  get_utils().Promise.catch_func(
+    get_utils().Promise.then_func(promise, function(messages)
+      vim.schedule(function()
+        -- デバッグ情報を追加
+        notify('コールバック実行: メッセージ件数=' .. #messages, vim.log.levels.INFO)
+        callback(true, messages)
+      end)
+    end),
+    function(err)
+      vim.schedule(function()
+        callback(false, err)
+      end)
+    end
+  )
 end
 
 --- スレッド返信を取得（Promise版）
@@ -175,18 +177,20 @@ end
 function M.get_thread_replies(channel, thread_ts, callback)
   local promise = M.get_thread_replies_promise(channel, thread_ts)
 
-  -- 修正: Promise.then_funcとPromise.catch_funcの代わりにthenとcatchメソッドを直接使用
-  promise:then(function(result)
-    vim.schedule(function()
-      -- デバッグ情報を追加
-      notify('スレッド返信取得コールバック実行: 返信件数=' .. #result.replies, vim.log.levels.INFO)
-      callback(true, result.replies, result.parent_message)
-    end)
-  end):catch(function(err)
-    vim.schedule(function()
-      callback(false, err)
-    end)
-  end)
+  get_utils().Promise.catch_func(
+    get_utils().Promise.then_func(promise, function(result)
+      vim.schedule(function()
+        -- デバッグ情報を追加
+        notify('スレッド返信取得コールバック実行: 返信件数=' .. #result.replies, vim.log.levels.INFO)
+        callback(true, result.replies, result.parent_message)
+      end)
+    end),
+    function(err)
+      vim.schedule(function()
+        callback(false, err)
+      end)
+    end
+  )
 end
 
 --- メッセージを送信（Promise版）
@@ -239,16 +243,18 @@ end
 function M.send_message(channel, text, callback)
   local promise = M.send_message_promise(channel, text)
 
-  -- 修正: Promise.then_funcとPromise.catch_funcの代わりにthenとcatchメソッドを直接使用
-  promise:then(function()
-    vim.schedule(function()
-      callback(true)
-    end)
-  end):catch(function()
-    vim.schedule(function()
-      callback(false)
-    end)
-  end)
+  get_utils().Promise.catch_func(
+    get_utils().Promise.then_func(promise, function()
+      vim.schedule(function()
+        callback(true)
+      end)
+    end),
+    function()
+      vim.schedule(function()
+        callback(false)
+      end)
+    end
+  )
 end
 
 --- メッセージに返信（Promise版）
@@ -324,16 +330,18 @@ end
 function M.reply_message(message_ts, text, callback)
   local promise = M.reply_message_promise(message_ts, text)
 
-  -- 修正: Promise.then_funcとPromise.catch_funcの代わりにthenとcatchメソッドを直接使用
-  promise:then(function()
-    vim.schedule(function()
-      callback(true)
-    end)
-  end):catch(function()
-    vim.schedule(function()
-      callback(false)
-    end)
-  end)
+  get_utils().Promise.catch_func(
+    get_utils().Promise.then_func(promise, function()
+      vim.schedule(function()
+        callback(true)
+      end)
+    end),
+    function()
+      vim.schedule(function()
+        callback(false)
+      end)
+    end
+  )
 end
 
 return M
