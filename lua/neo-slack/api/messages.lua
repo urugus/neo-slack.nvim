@@ -38,8 +38,9 @@ function M.get_messages_promise(channel, options)
   -- チャンネルIDを取得
   local channel_id_promise = get_api_channels().get_channel_id_promise(channel)
 
+  -- 修正: Promise.then_funcの代わりにthenメソッドを直接使用
   -- 最初のPromise: チャンネルIDを取得
-  local messages_promise = get_utils().Promise.then_func(channel_id_promise, function(channel_id)
+  return channel_id_promise:then(function(channel_id)
     local params = vim.tbl_extend('force', {
       channel = channel_id,
       limit = 100,
@@ -47,7 +48,9 @@ function M.get_messages_promise(channel, options)
 
     -- 2番目のPromise: メッセージを取得
     local request_promise = get_api_core().request_promise('GET', 'conversations.history', params)
-    return get_utils().Promise.then_func(request_promise, function(data)
+
+    -- 修正: Promise.then_funcの代わりにthenメソッドを直接使用
+    return request_promise:then(function(data)
       -- デバッグ情報を追加
       notify('APIレスポンス: ' .. vim.inspect(data), vim.log.levels.INFO)
 
@@ -68,10 +71,8 @@ function M.get_messages_promise(channel, options)
 
       return data.messages
     end)
-  end)
-
-  -- エラーハンドリング
-  return get_utils().Promise.catch_func(messages_promise, function(err)
+  end):catch(function(err)
+    -- エラーハンドリング
     local error_msg = err.error or 'Unknown error'
     notify('メッセージの取得に失敗しました - ' .. error_msg, vim.log.levels.ERROR)
     return get_utils().Promise.reject(err)
@@ -87,11 +88,14 @@ function M.get_messages(channel, callback, options)
   local promise = M.get_messages_promise(channel, options)
 
   -- Promiseが解決されるのを待ってからコールバックを呼び出す
-  get_utils().Promise.then_func(promise, function(messages)
+  -- 修正: then_funcの代わりにthenメソッドを直接使用
+  promise:then(function(messages)
     vim.schedule(function()
+      -- デバッグ情報を追加
+      notify('コールバック実行: メッセージ件数=' .. #messages, vim.log.levels.INFO)
       callback(true, messages)
     end)
-  end, function(err)
+  end):catch(function(err)
     vim.schedule(function()
       callback(false, err)
     end)
@@ -106,8 +110,9 @@ function M.get_thread_replies_promise(channel, thread_ts)
   -- チャンネルIDを取得
   local channel_id_promise = get_api_channels().get_channel_id_promise(channel)
 
+  -- 修正: Promise.then_funcの代わりにthenメソッドを直接使用
   -- 最初のPromise: チャンネルIDを取得
-  local replies_promise = get_utils().Promise.then_func(channel_id_promise, function(channel_id)
+  return channel_id_promise:then(function(channel_id)
     local params = {
       channel = channel_id,
       ts = thread_ts,
@@ -117,7 +122,9 @@ function M.get_thread_replies_promise(channel, thread_ts)
 
     -- 2番目のPromise: スレッド返信を取得
     local request_promise = get_api_core().request_promise('GET', 'conversations.replies', params)
-    return get_utils().Promise.then_func(request_promise, function(data)
+
+    -- 修正: Promise.then_funcの代わりにthenメソッドを直接使用
+    return request_promise:then(function(data)
       -- 最初のメッセージは親メッセージなので、返信のみを返す
       local result = {
         replies = {},
@@ -141,10 +148,8 @@ function M.get_thread_replies_promise(channel, thread_ts)
 
       return result
     end)
-  end)
-
-  -- エラーハンドリング
-  return get_utils().Promise.catch_func(replies_promise, function(err)
+  end):catch(function(err)
+    -- エラーハンドリング
     local error_msg = err.error or 'Unknown error'
 
     -- 権限エラーの場合、より詳細な情報を提供
@@ -158,7 +163,8 @@ function M.get_thread_replies_promise(channel, thread_ts)
       notify('スレッド返信の取得に失敗しました - ' .. error_msg, vim.log.levels.ERROR)
     end
 
-    return utils.Promise.reject(err)
+    -- 修正: utils.Promise.rejectの代わりにget_utils().Promise.rejectを使用
+    return get_utils().Promise.reject(err)
   end)
 end
 
@@ -170,18 +176,18 @@ end
 function M.get_thread_replies(channel, thread_ts, callback)
   local promise = M.get_thread_replies_promise(channel, thread_ts)
 
-  get_utils().Promise.catch_func(
-    get_utils().Promise.then_func(promise, function(result)
-      vim.schedule(function()
-        callback(true, result.replies, result.parent_message)
-      end)
-    end),
-    function(err)
-      vim.schedule(function()
-        callback(false, err)
-      end)
-    end
-  )
+  -- 修正: Promise.then_funcとPromise.catch_funcの代わりにthenとcatchメソッドを直接使用
+  promise:then(function(result)
+    vim.schedule(function()
+      -- デバッグ情報を追加
+      notify('スレッド返信取得コールバック実行: 返信件数=' .. #result.replies, vim.log.levels.INFO)
+      callback(true, result.replies, result.parent_message)
+    end)
+  end):catch(function(err)
+    vim.schedule(function()
+      callback(false, err)
+    end)
+  end)
 end
 
 --- メッセージを送信（Promise版）
@@ -195,8 +201,9 @@ function M.send_message_promise(channel, text, options)
   -- チャンネルIDを取得
   local channel_id_promise = get_api_channels().get_channel_id_promise(channel)
 
+  -- 修正: Promise.then_funcの代わりにthenメソッドを直接使用
   -- 最初のPromise: チャンネルIDを取得
-  local message_promise = get_utils().Promise.then_func(channel_id_promise, function(channel_id)
+  return channel_id_promise:then(function(channel_id)
     local params = vim.tbl_extend('force', {
       channel = channel_id,
       text = text,
@@ -204,7 +211,9 @@ function M.send_message_promise(channel, text, options)
 
     -- 2番目のPromise: メッセージを送信
     local request_promise = get_api_core().request_promise('POST', 'chat.postMessage', params)
-    return get_utils().Promise.then_func(request_promise, function(data)
+
+    -- 修正: Promise.then_funcの代わりにthenメソッドを直接使用
+    return request_promise:then(function(data)
       notify('メッセージを送信しました', vim.log.levels.INFO)
 
       -- メッセージ送信イベントを発行
@@ -212,10 +221,8 @@ function M.send_message_promise(channel, text, options)
 
       return data
     end)
-  end)
-
-  -- エラーハンドリング
-  return get_utils().Promise.catch_func(message_promise, function(err)
+  end):catch(function(err)
+    -- エラーハンドリング
     local error_msg = err.error or 'Unknown error'
     notify('メッセージの送信に失敗しました - ' .. error_msg, vim.log.levels.ERROR)
 
@@ -233,18 +240,17 @@ end
 --- @return nil
 function M.send_message(channel, text, callback)
   local promise = M.send_message_promise(channel, text)
-  get_utils().Promise.catch_func(
-    get_utils().Promise.then_func(promise, function()
-      vim.schedule(function()
-        callback(true)
-      end)
-    end),
-    function()
-      vim.schedule(function()
-        callback(false)
-      end)
-    end
-  )
+
+  -- 修正: Promise.then_funcとPromise.catch_funcの代わりにthenとcatchメソッドを直接使用
+  promise:then(function()
+    vim.schedule(function()
+      callback(true)
+    end)
+  end):catch(function()
+    vim.schedule(function()
+      callback(false)
+    end)
+  end)
 end
 
 --- メッセージに返信（Promise版）
@@ -272,10 +278,9 @@ function M.reply_message_promise(message_ts, text, channel_id, options)
 
         -- 取得したチャンネルIDで再帰的に呼び出し
         local promise = M.reply_message_promise(message_ts, text, current_channel_id, options)
-        get_utils().Promise.catch_func(
-          get_utils().Promise.then_func(promise, resolve),
-          reject
-        )
+
+        -- 修正: Promise.then_funcとPromise.catch_funcの代わりにthenとcatchメソッドを直接使用
+        promise:then(resolve):catch(reject)
       end)
 
       return
@@ -290,25 +295,23 @@ function M.reply_message_promise(message_ts, text, channel_id, options)
 
     local request_promise = get_api_core().request_promise('POST', 'chat.postMessage', params)
 
-    get_utils().Promise.catch_func(
-      get_utils().Promise.then_func(request_promise, function(data)
-        notify('返信を送信しました', vim.log.levels.INFO)
+    -- 修正: Promise.then_funcとPromise.catch_funcの代わりにthenとcatchメソッドを直接使用
+    request_promise:then(function(data)
+      notify('返信を送信しました', vim.log.levels.INFO)
 
-        -- 返信送信イベントを発行
-        get_events().emit('api:message_replied', channel_id, message_ts, text, data)
+      -- 返信送信イベントを発行
+      get_events().emit('api:message_replied', channel_id, message_ts, text, data)
 
-        resolve(data)
-      end),
-      function(err)
-        local error_msg = err.error or 'Unknown error'
-        notify('返信の送信に失敗しました - ' .. error_msg, vim.log.levels.ERROR)
+      resolve(data)
+    end):catch(function(err)
+      local error_msg = err.error or 'Unknown error'
+      notify('返信の送信に失敗しました - ' .. error_msg, vim.log.levels.ERROR)
 
-        -- 返信送信失敗イベントを発行
-        get_events().emit('api:message_replied_failure', channel_id, message_ts, text, err)
+      -- 返信送信失敗イベントを発行
+      get_events().emit('api:message_replied_failure', channel_id, message_ts, text, err)
 
-        reject(err)
-      end
-    )
+      reject(err)
+    end)
   end)
 end
 
@@ -319,18 +322,17 @@ end
 --- @return nil
 function M.reply_message(message_ts, text, callback)
   local promise = M.reply_message_promise(message_ts, text)
-  get_utils().Promise.catch_func(
-    get_utils().Promise.then_func(promise, function()
-      vim.schedule(function()
-        callback(true)
-      end)
-    end),
-    function()
-      vim.schedule(function()
-        callback(false)
-      end)
-    end
-  )
+
+  -- 修正: Promise.then_funcとPromise.catch_funcの代わりにthenとcatchメソッドを直接使用
+  promise:then(function()
+    vim.schedule(function()
+      callback(true)
+    end)
+  end):catch(function()
+    vim.schedule(function()
+      callback(false)
+    end)
+  end)
 end
 
 return M
