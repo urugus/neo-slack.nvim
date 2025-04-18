@@ -614,7 +614,10 @@ end
 ---@param channel string|nil チャンネル名またはID
 ---@param messages table[]|nil メッセージオブジェクトの配列
 function M.show_messages(channel, messages)
+  notify('show_messages関数が呼び出されました: channel=' .. tostring(channel) .. ', messages=' .. tostring(messages and #messages or 0) .. '件', vim.log.levels.INFO)
+
   if not M.layout.messages_buf or not vim.api.nvim_buf_is_valid(M.layout.messages_buf) then
+    notify('メッセージバッファが無効です', vim.log.levels.ERROR)
     return
   end
 
@@ -640,11 +643,14 @@ function M.show_messages(channel, messages)
 
   -- メッセージがない場合
   if not messages or #messages == 0 then
+    notify('メッセージがありません', vim.log.levels.INFO)
     vim.api.nvim_buf_set_option(M.layout.messages_buf, 'modifiable', true)
     vim.api.nvim_buf_set_lines(M.layout.messages_buf, 0, -1, false, {'メッセージがありません'})
     vim.api.nvim_buf_set_option(M.layout.messages_buf, 'modifiable', false)
     return
   end
+
+  notify('メッセージを表示します: ' .. #messages .. '件', vim.log.levels.INFO)
 
   -- メッセージを時系列順にソート
   table.sort(messages, function(a, b)
@@ -814,6 +820,14 @@ function M.show_messages(channel, messages)
 
   -- 行とメッセージのマッピングを保存
   M.layout.line_to_message = line_to_message
+
+  -- メッセージ表示完了の通知
+  notify('メッセージ表示が完了しました: ' .. current_line .. '行', vim.log.levels.INFO)
+
+  -- メッセージウィンドウにフォーカス
+  if M.layout.messages_win and vim.api.nvim_win_is_valid(M.layout.messages_win) then
+    vim.api.nvim_set_current_win(M.layout.messages_win)
+  end
 end
 
 return M
