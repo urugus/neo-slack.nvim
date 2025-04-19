@@ -25,8 +25,6 @@ local function notify(message, level, opts)
   get_api_utils().notify(message, level, opts)
 end
 
--- この関数は不要になりました（依存性注入で置き換え）
-
 --- チャンネル一覧を取得（Promise版）
 --- @return table Promise
 function M.get_channels_promise()
@@ -111,7 +109,8 @@ end
 function M.get_channel_id(channel_name, callback)
   -- すでにIDの場合はそのまま返す
   if channel_name:match('^[A-Z0-9]+$') then
-    callback(channel_name)
+    notify('IDとして認識: ' .. channel_name, vim.log.levels.INFO)
+    callback(true, channel_name)
     return
   end
 
@@ -119,20 +118,21 @@ function M.get_channel_id(channel_name, callback)
   M.get_channels(function(success, channels)
     if not success then
       notify('チャンネル一覧の取得に失敗したため、チャンネルIDを特定できません', vim.log.levels.ERROR)
-      callback(nil)
+      callback(false, nil)
       return
     end
 
     -- チャンネル名からIDを検索
     for _, channel in ipairs(channels) do
       if channel.name == channel_name then
-        callback(channel.id)
+        notify('チャンネル名一致: ' .. channel_name .. ' -> ' .. channel.id, vim.log.levels.INFO)
+        callback(true, channel.id)
         return
       end
     end
 
     notify('チャンネル "' .. channel_name .. '" が見つかりません', vim.log.levels.ERROR)
-    callback(nil)
+    callback(false, nil)
   end)
 end
 
