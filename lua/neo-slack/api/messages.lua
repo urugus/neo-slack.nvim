@@ -83,21 +83,45 @@ end
 --- @param callback function コールバック関数
 --- @param options table|nil 追加オプション
 --- @return nil
+-- 後方互換性を考慮しない、シンプルな実装
 function M.get_messages(channel, callback, options)
-  local promise = M.get_messages_promise(channel, options)
+  -- チャンネルIDを取得
+  get_api_channels().get_channel_id(channel, function(success, channel_id)
+    if not success then
+      callback(false, channel_id) -- エラーの場合、channel_idにはエラー情報が入っている
+      return
+    end
 
-  -- Promiseが解決されるのを待ってからコールバックを呼び出す
-  local then_promise = promise["then"](promise, function(messages)
-    vim.schedule(function()
+    -- パラメータを設定
+    local params = {
+      channel = channel_id,
+      limit = 100,
+    }
+    if options then
+      params = vim.tbl_extend('force', params, options)
+    end
+
+    -- APIリクエストを実行
+    get_api_core().request('GET', 'conversations.history', params, function(success, data)
+      if not success then
+        callback(false, data) -- エラーの場合
+        return
+      end
+
       -- デバッグ情報を追加
-      notify('コールバック実行: メッセージ件数=' .. #messages, vim.log.levels.INFO)
-      callback(true, messages)
-    end)
-  end)
+      if not data.messages then
+        notify('messagesフィールドがありません', vim.log.levels.ERROR)
+        callback(true, {})
+        return
+      end
 
-  then_promise["catch"](then_promise, function(err)
-    vim.schedule(function()
-      callback(false, err)
+      notify('コールバック実行: メッセージ件数=' .. #data.messages, vim.log.levels.INFO)
+
+      -- メッセージ一覧取得イベントを発行
+      get_events().emit('api:messages_loaded', channel_id, data.messages)
+
+      -- コールバックを呼び出す
+      callback(true, data.messages)
     end)
   end)
   )
