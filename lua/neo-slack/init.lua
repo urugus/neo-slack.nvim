@@ -18,6 +18,7 @@ local function get_utils() return dependency.get('utils') end
 local function get_notification() return dependency.get('notification') end
 local function get_state() return dependency.get('state') end
 local function get_ui() return dependency.get('ui') end
+local function get_ui_layout() return dependency.get('ui.layout') end
 
 ---@class NeoSlack
 ---@field config NeoSlackConfig 設定オブジェクト
@@ -278,7 +279,8 @@ function M.list_channels()
 
   -- UIが初期化されているか確認
   local ui_module = get_ui()
-  if not ui_module.layout.channels_buf or not vim.api.nvim_buf_is_valid(ui_module.layout.channels_buf) then
+  local ui_layout = get_ui_layout()
+  if not ui_layout.layout.channels_buf or not vim.api.nvim_buf_is_valid(ui_layout.layout.channels_buf) then
     notify('UIを初期化します', vim.log.levels.INFO)
     -- UIを初期化
     ui_module.show()
