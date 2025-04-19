@@ -92,6 +92,14 @@ function M.show_messages(channel, messages)
   local line_to_message = {}
   local current_line = 0
 
+  -- ユーザー情報が更新されたときのイベントハンドラを登録
+  local event_id = get_events().on('state:user_cache_updated', function(user_id, user_data)
+    -- メッセージを再表示
+    M.show_messages(channel, messages)
+    -- イベントハンドラを削除（一度だけ実行）
+    get_events().off('state:user_cache_updated', event_id)
+  end)
+
   -- メッセージを表示
   for _, message in ipairs(messages) do
     -- メッセージの種類を判断
@@ -112,16 +120,6 @@ function M.show_messages(channel, messages)
         local display_name = user_data.profile.display_name
         local real_name = user_data.profile.real_name
         user_name = (display_name and display_name ~= '') and display_name or real_name
-      end
-
-      -- ユーザー情報が取得できなかった場合のみ非同期で取得を試みる
-      if not user_data and user_id then
-        get_api().get_user_info_by_id(user_id, function(success, user_data)
-          if success and user_data then
-            -- ユーザー情報をキャッシュに保存
-            get_state().set_user_cache(user_id, user_data)
-          end
-        end)
       end
     else
       -- システムメッセージの場合、subtypeに応じた表示にする
