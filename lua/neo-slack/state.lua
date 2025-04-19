@@ -418,8 +418,8 @@ end
 
 -- APIモジュールからのイベントハンドラを登録
 get_events().on('api:user_info_by_id_loaded', function(user_id, user_data)
-  -- キャッシュに保存
-  M.set_user_cache(user_id, user_data, true)
+  -- キャッシュに保存（イベントを発行するためにsilent=falseに設定）
+  M.set_user_cache(user_id, user_data, false)
 end)
 
 -- 現在のチャンネルIDを要求するイベントのハンドラを登録
