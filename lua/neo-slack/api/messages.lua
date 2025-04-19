@@ -124,7 +124,6 @@ function M.get_messages(channel, callback, options)
       callback(true, data.messages)
     end)
   end)
-  )
 end
 
 --- スレッド返信を取得（Promise版）
