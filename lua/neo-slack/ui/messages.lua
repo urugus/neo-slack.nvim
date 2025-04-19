@@ -92,13 +92,57 @@ function M.show_messages(channel, messages)
   local line_to_message = {}
   local current_line = 0
 
-  -- ユーザー情報が更新されたときのイベントハンドラを登録
-  local event_id = get_events().on('state:user_cache_updated', function(user_id, user_data)
-    -- メッセージを再表示
-    M.show_messages(channel, messages)
-    -- イベントハンドラを削除（一度だけ実行）
-    get_events().off('state:user_cache_updated', event_id)
-  end)
+  -- 先にすべてのユーザー情報を取得
+  local user_ids = {}
+  local user_names = {}
+
+  -- メッセージからユーザーIDを収集
+  for _, message in ipairs(messages) do
+    if not message.subtype and message.user then
+      user_ids[message.user] = true
+    end
+  end
+
+  -- ユーザー情報を取得（キャッシュから）
+  for user_id, _ in pairs(user_ids) do
+    local user_data = get_state().get_user_by_id(user_id)
+    if user_data then
+      -- キャッシュにある場合はそれを使用
+      local display_name = user_data.profile.display_name
+      local real_name = user_data.profile.real_name
+      user_names[user_id] = (display_name and display_name ~= '') and display_name or real_name
+    else
+      -- キャッシュにない場合は一旦unknownとして、後でAPIリクエストを行う
+      user_names[user_id] = "unknown"
+    end
+  end
+
+  -- キャッシュにないユーザー情報を取得するためのフラグ
+  local need_refresh = false
+
+  -- キャッシュにないユーザー情報をAPIから取得
+  for user_id, name in pairs(user_names) do
+    if name == "unknown" then
+      need_refresh = true
+      -- APIからユーザー情報を取得
+      get_api().get_user_info_by_id(user_id, function(success, data)
+        if success and data then
+          -- ユーザー情報をキャッシュに保存
+          get_state().set_user_cache(user_id, data)
+
+          -- 一定時間後にメッセージを再表示（すべてのAPIリクエストが完了するのを待つ）
+          vim.defer_fn(function()
+            M.show_messages(channel, messages)
+          end, 500)  -- 500ミリ秒後に再表示
+        end
+      end)
+    end
+  end
+
+  -- すでに取得済みのユーザー情報だけで十分な場合は再表示しない
+  if need_refresh then
+    notify('ユーザー情報を取得中です...', vim.log.levels.INFO)
+  end
 
   -- メッセージを表示
   for _, message in ipairs(messages) do
@@ -112,15 +156,7 @@ function M.show_messages(channel, messages)
     -- 通常のユーザーメッセージの場合
     if not is_system_message and message.user then
       local user_id = message.user
-
-      -- ユーザー名を取得（同期的に処理）
-      user_name = "unknown"
-      local user_data = get_state().get_user_by_id(user_id)
-      if user_data then
-        local display_name = user_data.profile.display_name
-        local real_name = user_data.profile.real_name
-        user_name = (display_name and display_name ~= '') and display_name or real_name
-      end
+      user_name = user_names[user_id] or "unknown"
     else
       -- システムメッセージの場合、subtypeに応じた表示にする
       if message.subtype == "channel_join" then
