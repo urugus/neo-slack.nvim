@@ -87,7 +87,7 @@ function M.get_messages(channel, callback, options)
   local promise = M.get_messages_promise(channel, options)
 
   -- Promiseが解決されるのを待ってからコールバックを呼び出す
-  promise:next(function(messages)
+  promise:then(function(messages)
     vim.schedule(function()
       -- デバッグ情報を追加
       notify('コールバック実行: メッセージ件数=' .. #messages, vim.log.levels.INFO)
