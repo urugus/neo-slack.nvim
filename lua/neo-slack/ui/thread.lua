@@ -145,10 +145,35 @@ function M.show_thread(channel_id, thread_ts, replies, parent_message)
   end
 
   -- 返信がない場合
-  if not replies then
+  if not replies or (type(replies) == "table" and #replies == 0) then
+    -- バッファを編集可能に設定
     vim.api.nvim_buf_set_option(layout.layout.thread_buf, 'modifiable', true)
-    vim.api.nvim_buf_set_lines(layout.layout.thread_buf, 0, -1, false, {'返信がありません'})
+
+    -- バッファをクリア
+    vim.api.nvim_buf_set_lines(layout.layout.thread_buf, 0, -1, false, {})
+
+    -- 行とメッセージのマッピング
+    local line_to_message = {}
+    local current_line = 0
+
+    -- parent_messageの処理は続行（親メッセージは表示する）
+    -- この後の親メッセージ表示コードが実行される
+
+    -- 返信がないメッセージを表示
+    vim.api.nvim_buf_set_lines(layout.layout.thread_buf, current_line, current_line + 1, false, {'このスレッドには返信がありません'})
+    current_line = current_line + 1
+
+    -- バッファを編集不可に設定
     vim.api.nvim_buf_set_option(layout.layout.thread_buf, 'modifiable', false)
+
+    -- 行とメッセージのマッピングを保存
+    layout.layout.line_to_thread_message = line_to_message
+
+    -- スレッドウィンドウにフォーカス
+    if layout.layout.thread_win and vim.api.nvim_win_is_valid(layout.layout.thread_win) then
+      vim.api.nvim_set_current_win(layout.layout.thread_win)
+    end
+
     return
   end
 
@@ -199,6 +224,30 @@ function M.show_thread(channel_id, thread_ts, replies, parent_message)
     -- 空行を追加
     vim.api.nvim_buf_set_lines(layout.layout.thread_buf, current_line, current_line + 1, false, {""})
     current_line = current_line + 1
+  else
+    -- parent_messageがnilの場合、thread_infoから情報を取得
+    local thread_info = get_state().get_current_thread()
+    if thread_info and type(thread_info) == "table" and thread_info.ts then
+      -- タイムスタンプをフォーマット
+      local timestamp = os.date("%Y-%m-%d %H:%M:%S", tonumber(thread_info.ts))
+
+      -- 親メッセージヘッダーを表示
+      local header = "【親メッセージ】 (元のメッセージを取得できませんでした) (" .. timestamp .. ")"
+      vim.api.nvim_buf_set_lines(layout.layout.thread_buf, current_line, current_line + 1, false, {header})
+      current_line = current_line + 1
+
+      -- 空行を追加
+      vim.api.nvim_buf_set_lines(layout.layout.thread_buf, current_line, current_line + 1, false, {""})
+      current_line = current_line + 1
+    else
+      -- thread_infoがない場合
+      vim.api.nvim_buf_set_lines(layout.layout.thread_buf, current_line, current_line + 1, false, {"【親メッセージ】 (元のメッセージを取得できませんでした)"})
+      current_line = current_line + 1
+
+      -- 空行を追加
+      vim.api.nvim_buf_set_lines(layout.layout.thread_buf, current_line, current_line + 1, false, {""})
+      current_line = current_line + 1
+    end
   end
 
   -- 返信メッセージを表示

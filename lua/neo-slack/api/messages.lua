@@ -146,22 +146,40 @@ function M.get_thread_replies_promise(channel, thread_ts)
     -- 2番目のPromise: スレッド返信を取得
     local request_promise = get_api_core().request_promise('GET', 'conversations.replies', params)
     return get_utils().Promise.then_func(request_promise, function(data)
+      -- デバッグ情報を追加
+      notify('conversations.replies APIレスポンス: ' .. vim.inspect(data):sub(1, 200) .. '...', vim.log.levels.INFO)
+
       -- 最初のメッセージは親メッセージなので、返信のみを返す
       local result = {
         replies = {},
         parent_message = nil
       }
 
+      -- messagesフィールドがあるか確認
+      if not data.messages then
+        notify('APIレスポンスにmessagesフィールドがありません', vim.log.levels.ERROR)
+        return result
+      end
+
+      -- messagesの件数を確認
+      notify('APIレスポンスのmessages件数: ' .. #data.messages, vim.log.levels.INFO)
+
       if #data.messages > 0 then
         -- 親メッセージを保存
         result.parent_message = data.messages[1]
+        notify('親メッセージを設定: ' .. vim.inspect(result.parent_message):sub(1, 100) .. '...', vim.log.levels.INFO)
 
         -- 2番目以降のメッセージ（返信）を返す
         if #data.messages > 1 then
           for i = 2, #data.messages do
             table.insert(result.replies, data.messages[i])
           end
+          notify('返信メッセージを設定: ' .. #result.replies .. '件', vim.log.levels.INFO)
+        else
+          notify('返信メッセージはありません', vim.log.levels.INFO)
         end
+      else
+        notify('messagesが空です', vim.log.levels.WARN)
       end
 
       -- スレッド返信取得イベントを発行
