@@ -97,6 +97,26 @@ end
 function M.show_thread(channel_id, thread_ts, replies, parent_message)
   local layout = get_layout()
 
+  -- デバッグ情報を追加
+  notify('show_thread関数が呼び出されました: channel_id=' .. tostring(channel_id) ..
+         ', thread_ts=' .. tostring(thread_ts) ..
+         ', replies=' .. tostring(replies) ..
+         ', parent_message=' .. tostring(parent_message), vim.log.levels.INFO)
+
+  -- repliesの内容を確認
+  if replies then
+    notify('replies件数: ' .. #replies, vim.log.levels.INFO)
+  else
+    notify('repliesがnilです', vim.log.levels.WARN)
+  end
+
+  -- parent_messageの内容を確認
+  if parent_message then
+    notify('parent_message: ' .. vim.inspect(parent_message):sub(1, 100) .. '...', vim.log.levels.INFO)
+  else
+    notify('parent_messageがnilです', vim.log.levels.WARN)
+  end
+
   -- スレッドウィンドウが存在しない場合は初期化
   if not layout.layout.thread_win or not vim.api.nvim_win_is_valid(layout.layout.thread_win) then
     M.init_thread_window()
@@ -113,6 +133,9 @@ function M.show_thread(channel_id, thread_ts, replies, parent_message)
     notify('現在のスレッドが設定されていません', vim.log.levels.ERROR)
     return
   end
+
+  -- thread_infoの内容を確認
+  notify('thread_info: ' .. vim.inspect(thread_info):sub(1, 100) .. '...', vim.log.levels.INFO)
 
   -- ウィンドウタイトルを設定
   if layout.layout.thread_win and vim.api.nvim_win_is_valid(layout.layout.thread_win) then
