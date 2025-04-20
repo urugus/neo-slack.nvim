@@ -144,6 +144,9 @@ function M.register_event_handlers()
       M.list_messages(channel_id)
     end
   end)
+
+  -- UIのイベントハンドラを登録
+  get_ui().setup_event_handlers()
 end
 
 --- Slackの接続状態を表示
@@ -468,7 +471,7 @@ function M.list_thread_replies(thread_ts)
       get_state().set_thread_messages(thread_ts, replies)
 
       -- UIにスレッド返信を表示
-      get_ui().show_thread_replies(thread_ts, replies, parent_message)
+      get_ui().show_thread(channel_id, thread_ts, replies, parent_message)
     else
       notify('スレッド返信の取得に失敗しました', vim.log.levels.ERROR)
     end
