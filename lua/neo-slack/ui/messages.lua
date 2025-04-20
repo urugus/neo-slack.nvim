@@ -188,8 +188,26 @@ function M.show_messages(channel, messages)
     line_to_message[current_line] = message
     current_line = current_line + 1
 
+    -- メンションを実際のユーザー名に変換する関数
+    local function replace_mentions(text)
+      -- <@USER_ID> 形式のメンションを検出して置換
+      return text:gsub("<@([A-Z0-9]+)>", function(user_id)
+        local user_name = user_names[user_id]
+        if user_name then
+          return "@" .. user_name
+        else
+          return "@user"
+        end
+      end)
+    end
+
     -- メッセージ内容を表示
     local text = message.text or "(内容なし)"
+
+    -- 通常のテキストメッセージのメンションを処理
+    if text and not message.blocks then
+      text = replace_mentions(text)
+    end
 
     -- リッチテキスト形式のメッセージの場合、特殊な処理を行う
     if message.blocks then
@@ -205,7 +223,10 @@ function M.show_messages(channel, messages)
                 if sub_element.type == "text" then
                   rich_text = rich_text .. sub_element.text
                 elseif sub_element.type == "user" then
-                  rich_text = rich_text .. "@user"
+                  -- ユーザーIDから実際のユーザー名を取得
+                  local user_id = sub_element.user_id
+                  local user_name = user_names[user_id] or "user"
+                  rich_text = rich_text .. "@" .. user_name
                 elseif sub_element.type == "usergroup" then
                   rich_text = rich_text .. "@group"
                 elseif sub_element.type == "channel" then
