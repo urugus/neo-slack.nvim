@@ -223,7 +223,47 @@ function M.get_thread_replies(channel, thread_ts, callback)
       vim.schedule(function()
         -- デバッグ情報を追加
         notify('スレッド返信取得コールバック実行: 返信件数=' .. (result.replies and #result.replies or 0), vim.log.levels.INFO)
-        callback(true, result.replies or {}, result.parent_message)
+
+        -- 問題のデバッグ: resultの内容を詳細に確認
+        notify('result全体: ' .. vim.inspect(result):sub(1, 300) .. '...', vim.log.levels.INFO)
+
+        -- APIレスポンスから直接データを取得する試み
+        local api_core = require('neo-slack.api.core')
+        api_core.request('GET', 'conversations.replies', {
+          channel = channel,
+          ts = thread_ts,
+          limit = 100,
+          inclusive = true
+        }, function(success, data)
+          if success then
+            notify('直接APIリクエスト成功: ' .. #data.messages .. '件のメッセージ', vim.log.levels.INFO)
+
+            -- 結果を処理
+            local processed_result = {
+              replies = {},
+              parent_message = nil
+            }
+
+            if #data.messages > 0 then
+              -- 親メッセージを保存
+              processed_result.parent_message = data.messages[1]
+
+              -- 2番目以降のメッセージ（返信）を返す
+              if #data.messages > 1 then
+                for i = 2, #data.messages do
+                  table.insert(processed_result.replies, data.messages[i])
+                end
+                notify('直接処理: 返信メッセージ' .. #processed_result.replies .. '件', vim.log.levels.INFO)
+              end
+            end
+
+            -- コールバックを呼び出す
+            callback(true, processed_result.replies, processed_result.parent_message)
+          else
+            -- 元のコールバックを呼び出す
+            callback(true, result.replies or {}, result.parent_message)
+          end
+        end)
       end)
     end),
     function(err)
