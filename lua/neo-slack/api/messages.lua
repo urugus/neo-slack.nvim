@@ -204,8 +204,8 @@ function M.get_thread_replies(channel, thread_ts, callback)
     get_utils().Promise.then_func(promise, function(result)
       vim.schedule(function()
         -- デバッグ情報を追加
-        notify('スレッド返信取得コールバック実行: 返信件数=' .. #result.replies, vim.log.levels.INFO)
-        callback(true, result.replies, result.parent_message)
+        notify('スレッド返信取得コールバック実行: 返信件数=' .. (result.replies and #result.replies or 0), vim.log.levels.INFO)
+        callback(true, result.replies or {}, result.parent_message)
       end)
     end),
     function(err)
