@@ -183,7 +183,14 @@ function M.show_messages(channel, messages)
     local timestamp = os.date("%Y-%m-%d %H:%M:%S", tonumber(message.ts))
 
     -- メッセージヘッダーを表示（ユーザー名とタイムスタンプ）
-    local header = header_prefix .. user_name .. " (" .. timestamp .. ")"
+    local header
+    if is_system_message then
+      -- システムメッセージの場合は角括弧付きで表示
+      header = header_prefix .. user_name .. " (" .. timestamp .. ")"
+    else
+      -- 通常のユーザーメッセージ
+      header = user_name .. " (" .. timestamp .. ")"
+    end
     vim.api.nvim_buf_set_lines(layout.layout.messages_buf, current_line, current_line + 1, false, {header})
     line_to_message[current_line] = message
     current_line = current_line + 1
@@ -263,7 +270,7 @@ function M.show_messages(channel, messages)
 
     -- リアクションがある場合は表示
     if message.reactions and #message.reactions > 0 then
-      local reactions_text = "  リアクション: "
+      local reactions_text = "  👍 リアクション: "
       for i, reaction in ipairs(message.reactions) do
         reactions_text = reactions_text .. ":" .. reaction.name .. ": " .. reaction.count
         if i < #message.reactions then
@@ -277,7 +284,7 @@ function M.show_messages(channel, messages)
 
     -- スレッドがある場合は表示
     if message.thread_ts and message.reply_count and message.reply_count > 0 then
-      local thread_text = "  スレッド: " .. message.reply_count .. "件の返信"
+      local thread_text = "  💬 スレッド: " .. message.reply_count .. "件の返信"
       vim.api.nvim_buf_set_lines(layout.layout.messages_buf, current_line, current_line + 1, false, {thread_text})
       line_to_message[current_line] = message
       current_line = current_line + 1
@@ -300,6 +307,46 @@ function M.show_messages(channel, messages)
   -- メッセージウィンドウにフォーカス
   if layout.layout.messages_win and vim.api.nvim_win_is_valid(layout.layout.messages_win) then
     vim.api.nvim_set_current_win(layout.layout.messages_win)
+
+    -- カーソル移動時のハイライト更新のためのオートコマンドを設定
+    vim.cmd([[
+      augroup neo_slack_messages_highlight
+        autocmd!
+        autocmd CursorMoved <buffer> lua require('neo-slack.ui.messages').highlight_current_message()
+      augroup END
+    ]])
+
+    -- 初期状態でカーソル位置のメッセージをハイライト
+    M.highlight_current_message()
+  end
+end
+
+-- 現在選択中のメッセージをハイライト
+function M.highlight_current_message()
+  local layout = get_layout()
+  if not layout.layout.messages_buf or not vim.api.nvim_buf_is_valid(layout.layout.messages_buf) then
+    return
+  end
+
+  -- 既存のハイライトをクリア
+  vim.api.nvim_buf_clear_namespace(layout.layout.messages_buf, -1, 0, -1)
+
+  -- カーソル位置の行を取得
+  local cursor = vim.api.nvim_win_get_cursor(layout.layout.messages_win)
+  local line = cursor[1] - 1 -- 0-indexedに変換
+
+  -- メッセージを取得
+  local message = layout.layout.line_to_message and layout.layout.line_to_message[line]
+  if not message then
+    return
+  end
+
+  -- メッセージに関連するすべての行をハイライト
+  for l, msg in pairs(layout.layout.line_to_message) do
+    if msg.ts == message.ts then
+      -- 行をハイライト
+      vim.api.nvim_buf_add_highlight(layout.layout.messages_buf, -1, 'NeoSlackCurrentMessage', l, 0, -1)
+    end
   end
 end
 
