@@ -205,7 +205,7 @@ function M.show_thread(channel_id, thread_ts, replies, parent_message)
     -- タイムスタンプをフォーマット
     local timestamp = os.date("%Y-%m-%d %H:%M:%S", tonumber(parent_message.ts))
 
-    -- 親メッセージヘッダーを表示
+    -- 親メッセージヘッダーを表示（強調表示）
     local header = "【親メッセージ】 " .. user_name .. " (" .. timestamp .. ")"
     vim.api.nvim_buf_set_lines(layout.layout.thread_buf, current_line, current_line + 1, false, {header})
     line_to_message[current_line] = parent_message
@@ -269,7 +269,30 @@ function M.show_thread(channel_id, thread_ts, replies, parent_message)
     local timestamp = os.date("%Y-%m-%d %H:%M:%S", tonumber(message.ts))
 
     -- メッセージヘッダーを表示
-    local header = user_name .. " (" .. timestamp .. ")"
+    local header
+    if message.subtype then
+      -- システムメッセージの場合は角括弧付きで表示
+      local prefix = ""
+      if message.subtype == "channel_join" then
+        prefix = "[参加] "
+      elseif message.subtype == "channel_leave" then
+        prefix = "[退出] "
+      elseif message.subtype == "channel_topic" then
+        prefix = "[トピック変更] "
+      elseif message.subtype == "channel_purpose" then
+        prefix = "[目的変更] "
+      elseif message.subtype == "channel_name" then
+        prefix = "[名前変更] "
+      elseif message.subtype == "bot_message" then
+        prefix = "[Bot] "
+      else
+        prefix = "[" .. message.subtype .. "] "
+      end
+      header = prefix .. user_name .. " (" .. timestamp .. ")"
+    else
+      -- 通常のユーザーメッセージ
+      header = user_name .. " (" .. timestamp .. ")"
+    end
     vim.api.nvim_buf_set_lines(layout.layout.thread_buf, current_line, current_line + 1, false, {header})
     line_to_message[current_line] = message
     current_line = current_line + 1
@@ -286,7 +309,7 @@ function M.show_thread(channel_id, thread_ts, replies, parent_message)
 
     -- リアクションがある場合は表示
     if message.reactions and #message.reactions > 0 then
-      local reactions_text = "  リアクション: "
+      local reactions_text = "  👍 リアクション: "
       for i, reaction in ipairs(message.reactions) do
         reactions_text = reactions_text .. ":" .. reaction.name .. ": " .. reaction.count
         if i < #message.reactions then
@@ -312,6 +335,46 @@ function M.show_thread(channel_id, thread_ts, replies, parent_message)
   -- スレッドウィンドウにフォーカス
   if layout.layout.thread_win and vim.api.nvim_win_is_valid(layout.layout.thread_win) then
     vim.api.nvim_set_current_win(layout.layout.thread_win)
+
+    -- カーソル移動時のハイライト更新のためのオートコマンドを設定
+    vim.cmd([[
+      augroup neo_slack_thread_highlight
+        autocmd!
+        autocmd CursorMoved <buffer> lua require('neo-slack.ui.thread').highlight_current_message()
+      augroup END
+    ]])
+
+    -- 初期状態でカーソル位置のメッセージをハイライト
+    M.highlight_current_message()
+  end
+end
+
+-- 現在選択中のメッセージをハイライト
+function M.highlight_current_message()
+  local layout = get_layout()
+  if not layout.layout.thread_buf or not vim.api.nvim_buf_is_valid(layout.layout.thread_buf) then
+    return
+  end
+
+  -- 既存のハイライトをクリア
+  vim.api.nvim_buf_clear_namespace(layout.layout.thread_buf, -1, 0, -1)
+
+  -- カーソル位置の行を取得
+  local cursor = vim.api.nvim_win_get_cursor(layout.layout.thread_win)
+  local line = cursor[1] - 1 -- 0-indexedに変換
+
+  -- メッセージを取得
+  local message = layout.layout.line_to_thread_message and layout.layout.line_to_thread_message[line]
+  if not message then
+    return
+  end
+
+  -- メッセージに関連するすべての行をハイライト
+  for l, msg in pairs(layout.layout.line_to_thread_message) do
+    if msg.ts == message.ts then
+      -- 行をハイライト
+      vim.api.nvim_buf_add_highlight(layout.layout.thread_buf, -1, 'NeoSlackCurrentMessage', l, 0, -1)
+    end
   end
 end
 
