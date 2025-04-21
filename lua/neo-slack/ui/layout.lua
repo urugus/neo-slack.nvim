@@ -23,7 +23,7 @@ M.layout = {
   thread_buf = nil,
   channels_width = 30,
   messages_width = 70,
-  thread_width = 50,
+  thread_width = 70, -- メッセージ一覧と同じ幅に設定
   min_width = 120,
   min_height = 30,
 }

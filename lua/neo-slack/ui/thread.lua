@@ -55,7 +55,7 @@ function M.init_thread_window()
   -- スレッドウィンドウを作成
   layout.layout.thread_win = layout.create_window(
     layout.layout.thread_buf,
-    layout.layout.thread_width,
+    layout_info.messages_width, -- メッセージ一覧と同じ幅を使用
     layout_info.height,
     2,
     layout_info.channels_width + layout_info.messages_width + 6,
