@@ -38,20 +38,8 @@ function M.setup(token)
   -- コアモジュールの初期化
   get_core().setup(token)
 
-  -- チーム情報を取得
-  M.get_team_info(function(success, data)
-    if success and data and data.team then
-      M.config.team_info = data
-      get_utils().notify(data.team.name .. 'に接続しました', vim.log.levels.INFO, { prefix = 'API: ' })
-    end
-  end)
-
-  -- ユーザー情報を取得
-  M.get_user_info(function(success, data)
-    if success then
-      M.config.user_info = data
-    end
-  end)
+  -- 不要なAPI呼び出しを削除
+  -- team.infoとusers.identityは必須ではないため、スコープ要求を減らす
 end
 
 --------------------------------------------------
