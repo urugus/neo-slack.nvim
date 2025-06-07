@@ -45,7 +45,14 @@ function M.get_channels_promise()
     end),
     function(err)
       local error_msg = err.error or 'Unknown error'
-      notify('チャンネル一覧の取得に失敗しました - ' .. error_msg, vim.log.levels.ERROR)
+      local notification = 'チャンネル一覧の取得に失敗しました - ' .. error_msg
+      
+      -- missing_scope エラーの場合、必要なスコープ情報を追加
+      if err.error == 'missing_scope' and err.context and err.context.needed_scope then
+        notification = notification .. '\n必要なスコープ: ' .. err.context.needed_scope
+      end
+      
+      notify(notification, vim.log.levels.ERROR)
       return get_utils().Promise.reject(err)
     end
   )

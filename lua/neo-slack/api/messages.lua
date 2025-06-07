@@ -66,7 +66,14 @@ function M.get_messages_promise(channel, options)
   -- エラーハンドリング
   return get_utils().Promise.catch_func(messages_promise, function(err)
     local error_msg = err.error or 'Unknown error'
-    notify('メッセージの取得に失敗しました - ' .. error_msg, vim.log.levels.ERROR)
+    local notification = 'メッセージの取得に失敗しました - ' .. error_msg
+    
+    -- missing_scope エラーの場合、必要なスコープ情報を追加
+    if err.error == 'missing_scope' and err.context and err.context.needed_scope then
+      notification = notification .. '\n必要なスコープ: ' .. err.context.needed_scope
+    end
+    
+    notify(notification, vim.log.levels.ERROR)
     return get_utils().Promise.reject(err)
   end)
 end
@@ -178,16 +185,22 @@ function M.get_thread_replies_promise(channel, thread_ts)
     -- エラーハンドリング
     local error_msg = err.error or 'Unknown error'
 
-    -- 権限エラーの場合、より詳細な情報を提供
-    if error_msg == 'missing_scope' then
-      notify('スレッド返信の取得に失敗しました - 権限不足 (missing_scope)\n' ..
-             'Slackトークンに必要な権限がありません。\n' ..
-             '必要な権限: channels:history, groups:history, im:history, mpim:history\n' ..
-             'https://api.slack.com/apps で以下の権限を追加してください:\n' ..
-             '- User Token Scopes: channels:history, groups:history, im:history, mpim:history', vim.log.levels.ERROR)
-    else
-      notify('スレッド返信の取得に失敗しました - ' .. error_msg, vim.log.levels.ERROR)
+    local notification = 'スレッド返信の取得に失敗しました - ' .. error_msg
+    
+    -- missing_scope エラーの場合、必要なスコープ情報を追加
+    if err.error == 'missing_scope' then
+      notification = notification .. ' (権限不足)'
+      if err.context and err.context.needed_scope then
+        notification = notification .. '\n必要なスコープ: ' .. err.context.needed_scope
+      else
+        notification = notification .. '\nSlackトークンに必要な権限がありません。\n' ..
+                      '推定される権限: channels:history, groups:history, im:history, mpim:history\n' ..
+                      'https://api.slack.com/apps で以下の権限を追加してください:\n' ..
+                      '- User Token Scopes: channels:history, groups:history, im:history, mpim:history'
+      end
     end
+    
+    notify(notification, vim.log.levels.ERROR)
 
     -- 修正: utils.Promise.rejectの代わりにget_utils().Promise.rejectを使用
     return get_utils().Promise.reject(err)
@@ -284,7 +297,14 @@ function M.send_message_promise(channel, text, options)
   -- エラーハンドリング
   return get_utils().Promise.catch_func(message_promise, function(err)
     local error_msg = err.error or 'Unknown error'
-    notify('メッセージの送信に失敗しました - ' .. error_msg, vim.log.levels.ERROR)
+    local notification = 'メッセージの送信に失敗しました - ' .. error_msg
+    
+    -- missing_scope エラーの場合、必要なスコープ情報を追加
+    if err.error == 'missing_scope' and err.context and err.context.needed_scope then
+      notification = notification .. '\n必要なスコープ: ' .. err.context.needed_scope
+    end
+    
+    notify(notification, vim.log.levels.ERROR)
 
     -- メッセージ送信失敗イベントを発行
     get_events().emit('api:message_sent_failure', channel, text, err)
@@ -369,7 +389,14 @@ function M.reply_message_promise(message_ts, text, channel_id, options)
       end),
       function(err)
         local error_msg = err.error or 'Unknown error'
-        notify('返信の送信に失敗しました - ' .. error_msg, vim.log.levels.ERROR)
+        local notification = 'スレッドへの返信に失敗しました - ' .. error_msg
+        
+        -- missing_scope エラーの場合、必要なスコープ情報を追加
+        if err.error == 'missing_scope' and err.context and err.context.needed_scope then
+          notification = notification .. '\n必要なスコープ: ' .. err.context.needed_scope
+        end
+        
+        notify(notification, vim.log.levels.ERROR)
 
         -- 返信送信失敗イベントを発行
         get_events().emit('api:message_replied_failure', channel_id, message_ts, text, err)

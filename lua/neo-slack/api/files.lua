@@ -89,7 +89,16 @@ function M.upload_file_promise(channel, file_path, options)
           if response.ok then
             resolve(response)
           else
-            reject({ error = response.error or 'Unknown error', data = response })
+            local error_obj = { error = response.error or 'Unknown error', data = response }
+            
+            -- missing_scope エラーの場合、必要なスコープ情報を追加
+            if response.error == 'missing_scope' and response.needed then
+              error_obj.context = { needed_scope = response.needed }
+              local notification = 'ファイルのアップロードに失敗しました - ' .. response.error .. '\n必要なスコープ: ' .. response.needed
+              notify(notification, vim.log.levels.ERROR)
+            end
+            
+            reject(error_obj)
           end
         end,
         on_exit = function(_, exit_code)

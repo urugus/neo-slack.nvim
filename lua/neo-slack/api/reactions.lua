@@ -80,7 +80,14 @@ function M.add_reaction_promise(message_ts, emoji, channel_id)
       end),
       function(err)
         local error_msg = err.error or 'Unknown error'
-        notify('リアクションの追加に失敗しました - ' .. error_msg, vim.log.levels.ERROR)
+        local notification = 'リアクションの追加に失敗しました - ' .. error_msg
+        
+        -- missing_scope エラーの場合、必要なスコープ情報を追加
+        if err.error == 'missing_scope' and err.context and err.context.needed_scope then
+          notification = notification .. '\n必要なスコープ: ' .. err.context.needed_scope
+        end
+        
+        notify(notification, vim.log.levels.ERROR)
 
         -- リアクション追加失敗イベントを発行
         get_events().emit('api:reaction_added_failure', channel_id, message_ts, emoji, err)

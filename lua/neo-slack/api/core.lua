@@ -22,11 +22,13 @@ local M = {}
 ---@field token string Slack APIトークン
 ---@field team_info table|nil チーム情報
 ---@field user_info table|nil ユーザー情報
+---@field scopes string|nil トークンのスコープ
 M.config = {
   base_url = 'https://slack.com/api/',
   token = '',
   team_info = nil,
   user_info = nil,
+  scopes = nil,
 }
 
 -- 通知ヘルパー関数
@@ -43,6 +45,8 @@ end
 --- @return nil
 function M.setup(token)
   M.config.token = token
+  -- スコープ情報をリセット
+  M.config.scopes = nil
 end
 
 --- APIリクエストを実行（Promise版）
@@ -80,6 +84,11 @@ function M.test_connection_promise()
     get_utils().Promise.then_func(promise, function(data)
       -- チーム情報を保存
       M.config.team_info = data
+      
+      -- スコープ情報も保存（auth.testのレスポンスにscopesフィールドがある場合）
+      if data.scopes then
+        M.config.scopes = data.scopes
+      end
 
       -- 接続成功イベントを発行
       get_events().emit('api:connected', data)
@@ -87,7 +96,15 @@ function M.test_connection_promise()
       return data
     end),
     function(err)
-      get_api_utils().notify('接続テスト失敗: ' .. vim.inspect(err), vim.log.levels.ERROR)
+      local error_msg = err.error or 'Unknown error'
+      local notification = '接続テスト失敗: ' .. error_msg
+      
+      -- missing_scope エラーの場合、必要なスコープ情報を追加
+      if err.error == 'missing_scope' and err.context and err.context.needed_scope then
+        notification = notification .. '\n必要なスコープ: ' .. err.context.needed_scope
+      end
+      
+      get_api_utils().notify(notification, vim.log.levels.ERROR)
       -- 接続失敗イベントを発行
       get_events().emit('api:connection_failed', err)
 
@@ -111,5 +128,42 @@ end
 --- @param callback function コールバック関数
 --- @return nil
 M.get_team_info = get_api_utils().create_callback_version(M.get_team_info_promise)
+
+--- 現在のスコープを取得
+--- @return string|nil スコープ文字列
+function M.get_scopes()
+  return M.config.scopes
+end
+
+--- 必要なスコープをチェック
+--- @param required_scopes table 必要なスコープのリスト
+--- @return boolean, table|nil 全てのスコープがあるかtrue、不足スコープのリスト
+function M.check_scopes(required_scopes)
+  if not M.config.scopes then
+    return false, required_scopes
+  end
+  
+  local missing_scopes = {}
+  local current_scopes = vim.split(M.config.scopes, ',')
+  
+  -- 現在のスコープをセットに変換
+  local scope_set = {}
+  for _, scope in ipairs(current_scopes) do
+    scope_set[vim.trim(scope)] = true
+  end
+  
+  -- 必要なスコープをチェック
+  for _, required in ipairs(required_scopes) do
+    if not scope_set[required] then
+      table.insert(missing_scopes, required)
+    end
+  end
+  
+  if #missing_scopes > 0 then
+    return false, missing_scopes
+  end
+  
+  return true, nil
+end
 
 return M

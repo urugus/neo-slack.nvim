@@ -136,14 +136,23 @@ function M.request_promise(method, endpoint, params, options, token, base_url)
         end
 
         if not data.ok then
+          -- missing_scope エラーの場合、必要なスコープ情報を含める
+          local error_message = 'APIエラー: ' .. (data.error or 'Unknown API error')
+          local context = {
+            endpoint = endpoint,
+            error_code = data.error,
+            data = data
+          }
+          
+          if data.error == 'missing_scope' and data.needed then
+            error_message = error_message .. '\n必要なスコープ: ' .. data.needed
+            context.needed_scope = data.needed
+          end
+          
           local error_obj = errors.create_error(
             errors.error_types.API,
-            'APIエラー: ' .. (data.error or 'Unknown API error'),
-            {
-              endpoint = endpoint,
-              error_code = data.error,
-              data = data
-            }
+            error_message,
+            context
           )
           errors.handle_error(error_obj)
           reject(error_obj)

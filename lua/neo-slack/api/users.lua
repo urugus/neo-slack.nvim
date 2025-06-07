@@ -82,7 +82,14 @@ function M.get_user_info_by_id_promise(user_id)
     end),
     function(err)
       local error_msg = err.error or 'Unknown error'
-      notify('ユーザー情報の取得に失敗しました - ' .. error_msg, vim.log.levels.WARN)
+      local notification = 'ユーザー情報の取得に失敗しました - ' .. error_msg
+      
+      -- missing_scope エラーの場合、必要なスコープ情報を追加
+      if err.error == 'missing_scope' and err.context and err.context.needed_scope then
+        notification = notification .. '\n必要なスコープ: ' .. err.context.needed_scope
+      end
+      
+      notify(notification, vim.log.levels.WARN)
       return get_utils().Promise.reject(err)
     end
   )
