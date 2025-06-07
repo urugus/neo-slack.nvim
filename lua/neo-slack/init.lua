@@ -35,9 +35,6 @@ end
 local function get_ui()
   return dependency.get("ui")
 end
-local function get_ui_layout()
-  return dependency.get("ui.layout")
-end
 
 ---@class NeoSlack
 ---@field config NeoSlackConfig 設定オブジェクト
@@ -288,8 +285,7 @@ end
 function M.list_channels()
   -- UIが初期化されているか確認
   local ui_module = get_ui()
-  local ui_layout = get_ui_layout()
-  if not ui_layout.layout.channels_buf or not vim.api.nvim_buf_is_valid(ui_layout.layout.channels_buf) then
+  if not ui_module.layout.channels_buf or not vim.api.nvim_buf_is_valid(ui_module.layout.channels_buf) then
     -- UIを初期化
     ui_module.show()
     -- UIの初期化中にチャンネル一覧を取得するので、ここでは終了

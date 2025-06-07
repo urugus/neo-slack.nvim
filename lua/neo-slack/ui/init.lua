@@ -208,6 +208,9 @@ function M.close_thread()
   get_thread().close_thread()
 end
 
+-- レイアウトへのアクセスを提供
+M.layout = get_layout().layout
+
 -- 依存性注入コンテナに登録
 dependency.register('ui', M)
 dependency.register('ui.layout', require('neo-slack.ui.layout'))

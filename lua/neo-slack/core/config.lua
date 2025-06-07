@@ -14,7 +14,6 @@ M.defaults = {
   token = '',
   default_channel = 'general',
   refresh_interval = 30,
-  notification = true,
   debug = false,
   auto_reconnect = true,
   reconnect_interval = 300, -- 5分
@@ -90,10 +89,6 @@ function M.load_from_vim_globals()
     M.current.refresh_interval = vim.g.neo_slack_refresh_interval
   end
   
-  -- 通知設定
-  if vim.g.neo_slack_notification ~= nil then
-    M.current.notification = vim.g.neo_slack_notification == 1
-  end
   
   -- デバッグモード
   if vim.g.neo_slack_debug ~= nil then

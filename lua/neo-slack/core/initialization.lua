@@ -14,7 +14,6 @@ local function get_config() return dependency.get('core.config') end
 local function get_state() return dependency.get('state') end
 local function get_storage() return dependency.get('storage') end
 local function get_api() return dependency.get('api') end
-local function get_notification() return dependency.get('notification') end
 local function get_errors() return dependency.get('core.errors') end
 
 ---@class NeoSlackInitialization
@@ -33,7 +32,6 @@ M.status = {
   storage = false,
   token = false,
   api = false,
-  notification = false,
   data = false,
   ui = false,
   events = false,
@@ -45,7 +43,6 @@ M.steps = {
   { name = 'storage', description = 'ストレージの初期化' },
   { name = 'token', description = 'トークンの取得' },
   { name = 'api', description = 'APIクライアントの初期化' },
-  { name = 'notification', description = '通知システムの初期化' },
   { name = 'data', description = 'データの読み込み' },
   { name = 'ui', description = 'UIの初期化' },
   { name = 'events', description = 'イベントハンドラの登録' },
@@ -269,16 +266,6 @@ function M.run_next_step(callback)
       end
       run_next_step_async(callback)
     end)
-
-  elseif step.name == 'notification' then
-    -- 通知システムの初期化
-    if get_config().get('notification') then
-      get_notification().setup(get_config().get('refresh_interval'))
-      complete_step('notification', true)
-    else
-      complete_step('notification', true)
-    end
-    run_next_step_async(callback)
 
   elseif step.name == 'data' then
     -- データの読み込み

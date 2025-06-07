@@ -101,8 +101,12 @@ function M.initialize()
   init_module('api.users', 'neo-slack.api.users')
 
   -- 機能モジュールの登録
-  init_module('ui', 'neo-slack.ui')
-  init_module('notification', 'neo-slack.notification')
+  init_module('ui', 'neo-slack.ui.init')
+  init_module('ui.layout', 'neo-slack.ui.layout')
+  init_module('ui.channels', 'neo-slack.ui.channels')
+  init_module('ui.messages', 'neo-slack.ui.messages')
+  init_module('ui.thread', 'neo-slack.ui.thread')
+  init_module('ui.keymaps', 'neo-slack.ui.keymaps')
 
   return success
 end

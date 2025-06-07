@@ -8,7 +8,6 @@ describe("neo-slack.nvim", function()
   local dependency_mock
   local api_mock
   local ui_mock
-  local notification_mock
   local events_mock
   local config_mock
   local state_mock
@@ -38,10 +37,6 @@ describe("neo-slack.nvim", function()
       show_messages = function() end,
       show_thread_replies = function() end,
       layout = { channels_buf = 1 },
-    }, true)
-
-    notification_mock = mock({
-      setup = function() end,
     }, true)
 
     events_mock = mock({
@@ -98,7 +93,6 @@ describe("neo-slack.nvim", function()
     -- 依存性注入コンテナのget関数をモック
     dependency_mock.get.returns_with_args("api", api_mock)
     dependency_mock.get.returns_with_args("ui", ui_mock)
-    dependency_mock.get.returns_with_args("notification", notification_mock)
     dependency_mock.get.returns_with_args("core.events", events_mock)
     dependency_mock.get.returns_with_args("core.config", config_mock)
     dependency_mock.get.returns_with_args("state", state_mock)
@@ -116,7 +110,6 @@ describe("neo-slack.nvim", function()
     mock.revert(dependency_mock)
     mock.revert(api_mock)
     mock.revert(ui_mock)
-    mock.revert(notification_mock)
     mock.revert(events_mock)
     mock.revert(config_mock)
     mock.revert(state_mock)
@@ -133,7 +126,6 @@ describe("neo-slack.nvim", function()
           token = "",
           default_channel = "general",
           refresh_interval = 30,
-          notification = true,
         }
       end
 
@@ -144,7 +136,6 @@ describe("neo-slack.nvim", function()
       assert.are.same("", neo_slack.config.token)
       assert.are.same("general", neo_slack.config.default_channel)
       assert.are.same(30, neo_slack.config.refresh_interval)
-      assert.is_true(neo_slack.config.notification)
     end)
 
     it("should merge provided options with defaults", function()
@@ -154,7 +145,6 @@ describe("neo-slack.nvim", function()
           token = "test-token",
           default_channel = "random",
           refresh_interval = 30,
-          notification = true,
         }
       end
 
@@ -168,7 +158,6 @@ describe("neo-slack.nvim", function()
       assert.are.same("test-token", neo_slack.config.token)
       assert.are.same("random", neo_slack.config.default_channel)
       assert.are.same(30, neo_slack.config.refresh_interval)
-      assert.is_true(neo_slack.config.notification)
     end)
 
     it("should initialize API client with token", function()
@@ -183,41 +172,6 @@ describe("neo-slack.nvim", function()
       assert.stub(initialization_mock.start).was_called()
     end)
 
-    it("should initialize notification system when enabled", function()
-      -- config_mockの挙動を設定
-      config_mock.get.returns_with_args("notification", true)
-      config_mock.get.returns_with_args("refresh_interval", 60)
-
-      -- initialization_mockのstartメソッドをオーバーライド
-      initialization_mock.start = function(callback)
-        -- 初期化プロセスをシミュレート
-        if callback then
-          callback(true)
-        end
-      end
-
-      neo_slack.setup({
-        token = "test-token",
-        notification = true,
-        refresh_interval = 60,
-      })
-
-      -- イベントハンドラが登録されたことを確認
-      assert.stub(events_mock.on).was_called()
-    end)
-
-    it("should not initialize notification system when disabled", function()
-      -- config_mockの挙動を設定
-      config_mock.get.returns_with_args("notification", false)
-
-      neo_slack.setup({
-        token = "test-token",
-        notification = false,
-      })
-
-      -- 通知システムが初期化されていないことを確認
-      assert.stub(notification_mock.setup).was_not_called()
-    end)
   end)
 
   describe("status", function()

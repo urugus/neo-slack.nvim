@@ -19,7 +19,6 @@ M.events = events
 ---@field token string Slack APIトークン
 ---@field default_channel string デフォルトチャンネル
 ---@field refresh_interval number 更新間隔（秒）
----@field notification boolean 通知の有効/無効
 ---@field debug boolean デバッグモード
 ---@field layout table レイアウト設定
 ---@field keymaps table キーマッピング設定
@@ -27,7 +26,6 @@ M.config = {
   token = '',
   default_channel = 'general',
   refresh_interval = 30,
-  notification = true,
   debug = false,
   layout = {
     type = 'split',  -- 'split', 'float', 'tab', 'telescope'
@@ -83,9 +81,6 @@ function M.setup(opts)
     M.config.refresh_interval = vim.g.neo_slack_refresh_interval
   end
   
-  if vim.g.neo_slack_notification ~= nil then
-    M.config.notification = vim.g.neo_slack_notification == 1
-  end
   
   if vim.g.neo_slack_debug ~= nil then
     M.config.debug = vim.g.neo_slack_debug == 1
