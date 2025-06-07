@@ -59,7 +59,6 @@ function M.start_notification_timer()
     M.check_for_notifications()
   end))
   
-  notify('通知システムを開始しました（更新間隔: ' .. M.config.refresh_interval .. '秒）', vim.log.levels.INFO)
 end
 
 -- 通知タイマーを停止

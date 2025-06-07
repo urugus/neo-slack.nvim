@@ -34,13 +34,11 @@ function M.get_channels_promise()
     limit = 1000
   }
 
-  notify('チャンネル一覧を取得中...', vim.log.levels.INFO)
 
   local promise = get_api_core().request_promise('GET', 'conversations.list', params)
   return get_utils().Promise.catch_func(
     get_utils().Promise.then_func(promise, function(data)
       -- チャンネル一覧取得イベントを発行
-      notify('チャンネル一覧を取得しました: ' .. (data.channels and #data.channels or 0) .. '件', vim.log.levels.INFO)
       get_events().emit('api:channels_loaded', data.channels)
 
       return data.channels
@@ -62,12 +60,9 @@ M.get_channels = get_api_utils().create_callback_version(M.get_channels_promise)
 --- @param channel_name string チャンネル名
 --- @return table Promise
 function M.get_channel_id_promise(channel_name)
-  -- デバッグ情報を追加
-  notify('チャンネル名/ID: ' .. tostring(channel_name), vim.log.levels.INFO)
 
   -- すでにIDの場合はそのまま返す
   if channel_name:match('^[A-Z0-9]+$') then
-    notify('IDとして認識: ' .. channel_name, vim.log.levels.INFO)
     return get_utils().Promise.new(function(resolve)
       resolve(channel_name)
     end)
@@ -83,14 +78,10 @@ function M.get_channel_id_promise(channel_name)
         return
       end
 
-      -- デバッグ情報を追加
-      notify('チャンネル一覧取得成功: ' .. #channels .. '件', vim.log.levels.INFO)
 
       -- チャンネル名からIDを検索
       for _, channel in ipairs(channels) do
-        notify('チャンネル情報: ' .. vim.inspect({id = channel.id, name = channel.name}), vim.log.levels.DEBUG)
         if channel.name == channel_name then
-          notify('チャンネル名一致: ' .. channel_name .. ' -> ' .. channel.id, vim.log.levels.INFO)
           resolve(channel.id)
           return
         end
@@ -109,7 +100,6 @@ end
 function M.get_channel_id(channel_name, callback)
   -- すでにIDの場合はそのまま返す
   if channel_name:match('^[A-Z0-9]+$') then
-    notify('IDとして認識: ' .. channel_name, vim.log.levels.INFO)
     callback(true, channel_name)
     return
   end

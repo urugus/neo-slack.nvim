@@ -30,7 +30,6 @@ end
 ---@param channel string|nil チャンネル名またはID
 ---@param messages table[]|nil メッセージオブジェクトの配列
 function M.show_messages(channel, messages)
-  notify('UIにメッセージ一覧を表示します: channel=' .. tostring(channel) .. ', messages=' .. tostring(messages and #messages or 0) .. '件', vim.log.levels.INFO)
 
   local layout = get_layout()
   if not layout.layout.messages_buf or not vim.api.nvim_buf_is_valid(layout.layout.messages_buf) then
@@ -68,14 +67,12 @@ function M.show_messages(channel, messages)
   end
 
   if #messages == 0 then
-    notify('messagesが空の配列です', vim.log.levels.INFO)
     vim.api.nvim_buf_set_option(layout.layout.messages_buf, 'modifiable', true)
     vim.api.nvim_buf_set_lines(layout.layout.messages_buf, 0, -1, false, {'メッセージがありません (空の配列)'})
     vim.api.nvim_buf_set_option(layout.layout.messages_buf, 'modifiable', false)
     return
   end
 
-  notify('メッセージを表示します: ' .. #messages .. '件', vim.log.levels.INFO)
 
   -- メッセージを時系列順にソート
   table.sort(messages, function(a, b)
@@ -141,7 +138,6 @@ function M.show_messages(channel, messages)
 
   -- すでに取得済みのユーザー情報だけで十分な場合は再表示しない
   if need_refresh then
-    notify('ユーザー情報を取得中です...', vim.log.levels.INFO)
   end
 
   -- メッセージを表示
@@ -301,8 +297,6 @@ function M.show_messages(channel, messages)
   -- 行とメッセージのマッピングを保存
   layout.layout.line_to_message = line_to_message
 
-  -- メッセージ表示完了の通知
-  notify('メッセージ表示が完了しました: ' .. current_line .. '行', vim.log.levels.INFO)
 
   -- メッセージウィンドウにフォーカス
   if layout.layout.messages_win and vim.api.nvim_win_is_valid(layout.layout.messages_win) then

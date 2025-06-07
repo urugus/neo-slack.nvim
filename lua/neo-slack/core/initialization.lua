@@ -83,7 +83,6 @@ local function start_step(step_name)
   for i, step in ipairs(M.steps) do
     if step.name == step_name then
       M.current_step = i
-      debug_log(string.format('[%d/%d] %s を開始...', i, M.total_steps, step.description))
       get_events().emit('initialization:step_started', step_name, i, M.total_steps)
       return true
     end
@@ -100,7 +99,6 @@ local function complete_step(step_name, success, error_message)
   local errors = get_errors()
 
   if success then
-    debug_log(string.format('[%d/%d] %s が完了しました', M.current_step, M.total_steps, M.steps[M.current_step].description))
   else
     local message = string.format('[%d/%d] %s に失敗しました', M.current_step, M.total_steps, M.steps[M.current_step].description)
     if error_message then
@@ -202,12 +200,10 @@ function M.run_next_step(callback)
 
       if saved_token then
         get_config().set('token', saved_token)
-        notify('保存されたトークンを読み込みました', vim.log.levels.INFO)
         complete_step('token', true)
         run_next_step_async(callback)
       else
         -- トークンの入力を求める
-        notify('Slackトークンが必要です', vim.log.levels.INFO)
 
         -- トークン入力プロンプトを表示
         vim.ui.input({
@@ -280,7 +276,6 @@ function M.run_next_step(callback)
       get_notification().setup(get_config().get('refresh_interval'))
       complete_step('notification', true)
     else
-      debug_log('通知システムは無効です')
       complete_step('notification', true)
     end
     run_next_step_async(callback)
@@ -315,7 +310,6 @@ function M.run_next_step(callback)
     -- イベントハンドラの登録
     -- 注意: 循環参照を避けるため、ここではイベントハンドラを登録しない
     -- イベントハンドラは init.lua の setup 関数内で明示的に登録される
-    debug_log('イベントハンドラの登録はinit.luaのsetup関数内で行われます')
     complete_step('events', true)
     run_next_step_async(callback)
 
@@ -339,12 +333,10 @@ function M.start(callback)
   -- 依存性を初期化
   initialize_dependencies()
   if M.is_initializing then
-    notify('初期化は既に進行中です', vim.log.levels.WARN)
     return
   end
 
   if M.is_initialized then
-    notify('既に初期化されています', vim.log.levels.INFO)
     if callback then
       callback(true)
     end
@@ -363,7 +355,6 @@ function M.start(callback)
   -- 初期化開始イベントを発行
   get_events().emit('initialization:started')
 
-  notify('初期化を開始します...', vim.log.levels.INFO)
 
   -- 最初のステップを実行
   run_next_step_async(callback)
@@ -408,7 +399,6 @@ function M.setup_reconnect_timer()
 
     get_api().test_connection(function(success, data)
       if success then
-        debug_log('接続は正常です - ワークスペース: ' .. (data.team or 'Unknown'))
       else
         local errors = get_errors()
 

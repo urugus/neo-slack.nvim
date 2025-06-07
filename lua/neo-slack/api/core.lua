@@ -73,13 +73,11 @@ M.request = get_api_utils().create_callback_version(M.request_promise)
 --- 接続テスト（Promise版）
 --- @return table Promise
 function M.test_connection_promise()
-  get_api_utils().notify('接続テストを実行します', vim.log.levels.INFO)
   local promise = M.request_promise('GET', 'auth.test', {})
 
   -- utils.Promise.then_funcとcatch_funcを使用
   return get_utils().Promise.catch_func(
     get_utils().Promise.then_func(promise, function(data)
-      get_api_utils().notify('接続テスト成功: ' .. vim.inspect(data), vim.log.levels.INFO)
       -- チーム情報を保存
       M.config.team_info = data
 

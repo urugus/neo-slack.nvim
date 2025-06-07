@@ -48,8 +48,6 @@ function M.get_messages_promise(channel, options)
     -- 2番目のPromise: メッセージを取得
     local request_promise = get_api_core().request_promise('GET', 'conversations.history', params)
     return get_utils().Promise.then_func(request_promise, function(data)
-      -- デバッグ情報を追加
-      notify('APIレスポンス: ' .. vim.inspect(data), vim.log.levels.INFO)
 
       -- messagesフィールドの確認
       if not data.messages then
@@ -57,11 +55,6 @@ function M.get_messages_promise(channel, options)
         return {}
       end
 
-      if #data.messages == 0 then
-        notify('メッセージが0件です', vim.log.levels.INFO)
-      else
-        notify('メッセージ件数: ' .. #data.messages, vim.log.levels.INFO)
-      end
 
       -- メッセージ一覧取得イベントを発行
       get_events().emit('api:messages_loaded', channel_id, data.messages)
@@ -115,7 +108,6 @@ function M.get_messages(channel, callback, options)
         return
       end
 
-      notify('コールバック実行: メッセージ件数=' .. #data.messages, vim.log.levels.INFO)
 
       -- メッセージ一覧取得イベントを発行
       get_events().emit('api:messages_loaded', channel_id, data.messages)
@@ -146,8 +138,6 @@ function M.get_thread_replies_promise(channel, thread_ts)
     -- 2番目のPromise: スレッド返信を取得
     local request_promise = get_api_core().request_promise('GET', 'conversations.replies', params)
     return get_utils().Promise.then_func(request_promise, function(data)
-      -- デバッグ情報を追加
-      notify('conversations.replies APIレスポンス: ' .. vim.inspect(data):sub(1, 200) .. '...', vim.log.levels.INFO)
 
       -- 最初のメッセージは親メッセージなので、返信のみを返す
       local result = {
@@ -161,25 +151,19 @@ function M.get_thread_replies_promise(channel, thread_ts)
         return result
       end
 
-      -- messagesの件数を確認
-      notify('APIレスポンスのmessages件数: ' .. #data.messages, vim.log.levels.INFO)
 
       if #data.messages > 0 then
         -- 親メッセージを保存
         result.parent_message = data.messages[1]
-        notify('親メッセージを設定: ' .. vim.inspect(result.parent_message):sub(1, 100) .. '...', vim.log.levels.INFO)
 
         -- 2番目以降のメッセージ（返信）を返す
         if #data.messages > 1 then
           for i = 2, #data.messages do
             table.insert(result.replies, data.messages[i])
           end
-          notify('返信メッセージを設定: ' .. #result.replies .. '件', vim.log.levels.INFO)
         else
-          notify('返信メッセージはありません', vim.log.levels.INFO)
         end
       else
-        notify('messagesが空です', vim.log.levels.WARN)
       end
 
       -- スレッド返信取得イベントを発行
@@ -221,11 +205,6 @@ function M.get_thread_replies(channel, thread_ts, callback)
   get_utils().Promise.catch_func(
     get_utils().Promise.then_func(promise, function(result)
       vim.schedule(function()
-        -- デバッグ情報を追加
-        notify('スレッド返信取得コールバック実行: 返信件数=' .. (result.replies and #result.replies or 0), vim.log.levels.INFO)
-
-        -- 問題のデバッグ: resultの内容を詳細に確認
-        notify('result全体: ' .. vim.inspect(result):sub(1, 300) .. '...', vim.log.levels.INFO)
 
         -- APIレスポンスから直接データを取得する試み
         local api_core = require('neo-slack.api.core')
@@ -236,7 +215,6 @@ function M.get_thread_replies(channel, thread_ts, callback)
           inclusive = true
         }, function(success, data)
           if success then
-            notify('直接APIリクエスト成功: ' .. #data.messages .. '件のメッセージ', vim.log.levels.INFO)
 
             -- 結果を処理
             local processed_result = {
@@ -253,7 +231,6 @@ function M.get_thread_replies(channel, thread_ts, callback)
                 for i = 2, #data.messages do
                   table.insert(processed_result.replies, data.messages[i])
                 end
-                notify('直接処理: 返信メッセージ' .. #processed_result.replies .. '件', vim.log.levels.INFO)
               end
             end
 

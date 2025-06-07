@@ -29,7 +29,6 @@ end
 -- チャンネル一覧を表示
 ---@param channels table[] チャンネルオブジェクトの配列
 function M.show_channels(channels)
-  notify('UIにチャンネル一覧を表示します: ' .. (channels and #channels or 0) .. '件', vim.log.levels.INFO)
 
   local layout = get_layout()
   if not layout.layout.channels_buf or not vim.api.nvim_buf_is_valid(layout.layout.channels_buf) then

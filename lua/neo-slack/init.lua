@@ -61,11 +61,9 @@ function M.setup(opts, callback)
   -- 初期化プロセスを開始
   get_initialization().start(function(success)
     if success then
-      notify('初期化が完了しました', vim.log.levels.INFO)
 
       -- イベントハンドラを登録（循環参照を避けるために明示的に呼び出す）
       M.register_event_handlers()
-      notify('イベントハンドラを登録しました', vim.log.levels.DEBUG)
 
       -- 注意: 自動的にチャンネル一覧を表示しないように変更
       -- チャンネル一覧を表示するには :SlackChannels コマンドを使用してください
@@ -85,7 +83,6 @@ end
 --- 初期化状態を取得
 --- @return table 初期化状態
 function M.get_initialization_status()
-  notify('初期化状態を確認します', vim.log.levels.INFO)
   local status = get_initialization().get_status()
 
   -- 初期化状態を表示
@@ -152,7 +149,6 @@ end
 --- Slackの接続状態を表示
 --- @return nil
 function M.status()
-  notify('接続状態を確認します', vim.log.levels.INFO)
 
   get_api().test_connection(function(success, data)
     if success then
@@ -217,7 +213,6 @@ function M.validate_and_save_token(token, callback)
     if success then
       -- トークンを保存
       if get_storage().save_token(token) then
-        notify('トークンを保存しました', vim.log.levels.INFO)
 
         -- 設定を更新して初期化を続行
         get_config().set('token', token)
@@ -250,12 +245,10 @@ end
 function M.delete_token(prompt_new)
   if get_storage().delete_token() then
     get_config().set('token', '')
-    notify('保存されたトークンを削除しました', vim.log.levels.INFO)
 
     -- 新しいトークンの入力を促す
     if prompt_new then
       vim.defer_fn(function()
-        notify('新しいSlackトークンを入力してください', vim.log.levels.INFO)
         M.prompt_for_token()
       end, 1000)
     end
@@ -278,13 +271,11 @@ end
 --- チャンネル一覧を取得して表示
 --- @return nil
 function M.list_channels()
-  notify('SlackChannelsコマンドが実行されました', vim.log.levels.INFO)
 
   -- UIが初期化されているか確認
   local ui_module = get_ui()
   local ui_layout = get_ui_layout()
   if not ui_layout.layout.channels_buf or not vim.api.nvim_buf_is_valid(ui_layout.layout.channels_buf) then
-    notify('UIを初期化します', vim.log.levels.INFO)
     -- UIを初期化
     ui_module.show()
     -- UIの初期化中にチャンネル一覧を取得するので、ここでは終了
@@ -293,7 +284,6 @@ function M.list_channels()
 
   get_api().get_channels(function(success, channels)
     if success then
-      notify('チャンネル一覧の取得に成功しました: ' .. #channels .. '件', vim.log.levels.INFO)
       -- 状態にチャンネル一覧を保存
       get_state().set_channels(channels)
       -- UIにチャンネル一覧を表示
@@ -327,26 +317,14 @@ function M.list_messages(channel)
   local channel_id, channel_name = get_state().get_current_channel()
   channel = channel or channel_id or get_config().get('default_channel')
 
-  notify('list_messages関数が呼び出されました: channel=' .. tostring(channel), vim.log.levels.INFO)
 
   get_api().get_messages(channel, function(success, messages)
-    notify('get_messages コールバックが呼び出されました: success=' .. tostring(success) .. ', messages=' .. tostring(messages and #messages or 0) .. '件', vim.log.levels.INFO)
 
-    -- messagesの型を確認
-    notify('messagesの型: ' .. type(messages), vim.log.levels.INFO)
 
     -- messagesが配列の場合、その内容を確認
     if type(messages) == 'table' then
-      notify('messagesの内容: ' .. vim.inspect(messages):sub(1, 100) .. '...', vim.log.levels.INFO)
 
-      -- messagesの各要素の型を確認
-      for i, msg in ipairs(messages) do
-        notify('messages[' .. i .. ']の型: ' .. type(msg), vim.log.levels.INFO)
-        if i >= 3 then break end -- 最初の3つだけ確認
-      end
 
-      -- #messagesの値を確認
-      notify('#messagesの値: ' .. #messages, vim.log.levels.INFO)
     end
 
     if success then
@@ -355,7 +333,6 @@ function M.list_messages(channel)
         get_state().set_messages(channel, messages)
       end
       -- UIにメッセージを表示
-      notify('UIにメッセージを表示します: channel=' .. tostring(channel) .. ', messages=' .. tostring(messages and #messages or 0) .. '件', vim.log.levels.INFO)
       get_ui().show_messages(channel, messages)
     else
       notify('メッセージの取得に失敗しました', vim.log.levels.ERROR)

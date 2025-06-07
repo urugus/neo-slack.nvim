@@ -82,7 +82,6 @@ function M.request_promise(method, endpoint, params, options, token, base_url)
   options = options or {}
   local errors = get_errors()
 
-  M.notify('APIリクエスト: ' .. method .. ' ' .. endpoint, vim.log.levels.INFO)
 
   if not token or token == '' then
     local error_obj = errors.create_error(
@@ -102,7 +101,6 @@ function M.request_promise(method, endpoint, params, options, token, base_url)
     }
 
     local url = base_url .. endpoint
-    M.notify('URL: ' .. url, vim.log.levels.INFO)
 
     local opts = {
       headers = headers,
@@ -152,21 +150,7 @@ function M.request_promise(method, endpoint, params, options, token, base_url)
           return
         end
 
-        M.notify('APIリクエスト成功: ' .. endpoint, vim.log.levels.INFO)
 
-        -- デバッグ情報を追加
-        if endpoint == 'conversations.history' then
-          M.notify('conversations.history レスポンス: ' .. vim.inspect(data), vim.log.levels.INFO)
-
-          -- messagesフィールドの確認
-          if not data.messages then
-            M.notify('conversations.history: messagesフィールドがありません', vim.log.levels.ERROR)
-          elseif #data.messages == 0 then
-            M.notify('conversations.history: メッセージが0件です', vim.log.levels.INFO)
-          else
-            M.notify('conversations.history: メッセージ件数: ' .. #data.messages, vim.log.levels.INFO)
-          end
-        end
 
         resolve(data)
       end
@@ -176,13 +160,11 @@ function M.request_promise(method, endpoint, params, options, token, base_url)
       -- GETリクエストの場合、パラメータをURLクエリパラメータとして送信
       -- ブール値を文字列に変換（plenary.curlはブール値を処理できない）
       local string_params = M.convert_bool_to_string(params)
-      M.notify('GETリクエストを送信: ' .. vim.inspect(string_params), vim.log.levels.INFO)
       curl.get(url, vim.tbl_extend('force', opts, { query = string_params }))
     elseif method == 'POST' then
       -- POSTリクエストの場合、パラメータをJSONボディとして送信
       opts.headers['Content-Type'] = 'application/json; charset=utf-8'
       opts.body = json.encode(params)
-      M.notify('POSTリクエストを送信', vim.log.levels.INFO)
       curl.post(url, opts)
     else
       M.notify('未対応のHTTPメソッド: ' .. method, vim.log.levels.ERROR)
