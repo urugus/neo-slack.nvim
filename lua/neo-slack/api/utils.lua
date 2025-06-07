@@ -104,7 +104,7 @@ function M.request_promise(method, endpoint, params, options, token, base_url)
 
     local opts = {
       headers = headers,
-      callback = function(response)
+      callback = vim.schedule_wrap(function(response)
         if response.status ~= 200 then
           local error_obj = errors.create_error(
             errors.error_types.NETWORK,
@@ -153,7 +153,7 @@ function M.request_promise(method, endpoint, params, options, token, base_url)
 
 
         resolve(data)
-      end
+      end)
     }
 
     if method == 'GET' then
