@@ -68,6 +68,7 @@ M.total_steps = #M.steps
 M.is_initializing = false
 M.is_initialized = false
 M.reconnect_timer = nil
+M.is_new_token = false
 
 -- 通知ヘルパー関数
 ---@param message string 通知メッセージ
@@ -206,6 +207,8 @@ function M.run_next_step(callback)
         complete_step("token", true)
         run_next_step_async(callback)
       else
+        -- 新規トークン登録フラグを立てる
+        M.is_new_token = true
         -- トークンの入力を求める
 
         -- トークン入力プロンプトを表示
@@ -253,10 +256,14 @@ function M.run_next_step(callback)
     -- 接続テスト
     get_api().test_connection(function(success, data)
       if success then
-        notify(
-          "Slack APIに接続しました - ワークスペース: " .. (data.team or "Unknown"),
-          vim.log.levels.INFO
-        )
+        -- 新規トークン登録時のみ通知
+        if M.is_new_token then
+          notify(
+            "Slack APIに接続しました - ワークスペース: " .. (data.team or "Unknown"),
+            vim.log.levels.INFO
+          )
+          M.is_new_token = false
+        end
         complete_step("api", true)
       else
         local errors = get_errors()
@@ -338,6 +345,7 @@ function M.start(callback)
   M.current_step = 0
   M.is_initializing = true
   M.is_initialized = false
+  M.is_new_token = false
 
   for step_name, _ in pairs(M.status) do
     M.status[step_name] = false
