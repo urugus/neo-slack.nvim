@@ -6,8 +6,10 @@ print("Checking syntax of all Lua files...")
 -- ファイルシステム操作のための関数
 local function read_dir(path)
   local files = {}
-  local p = io.popen('find ' .. path .. ' -name "*.lua"')
-  if not p then return files end
+  local p = io.popen("find " .. path .. ' -name "*.lua"')
+  if not p then
+    return files
+  end
 
   for file in p:lines() do
     table.insert(files, file)

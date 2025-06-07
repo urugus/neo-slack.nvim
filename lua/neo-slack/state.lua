@@ -15,26 +15,17 @@
 ---@field initialized boolean プラグインが初期化されたかどうか
 
 -- 依存性注入コンテナ
-local dependency = require('neo-slack.core.dependency')
+local dependency = require("neo-slack.core.dependency")
 
 -- 依存モジュールの取得用関数
-local function get_storage() return dependency.get('storage') end
-local function get_events() return dependency.get('core.events') end
-local function get_utils() return dependency.get('utils') end
+local function get_storage()
+  return dependency.get("storage")
+end
+local function get_events()
+  return dependency.get("core.events")
+end
 
 local M = {}
-
--- これらの関数は不要になりました（依存性注入で置き換え）
-
--- 通知ヘルパー関数
----@param message string 通知メッセージ
----@param level number 通知レベル
----@param opts table|nil 追加オプション
-local function notify(message, level, opts)
-  opts = opts or {}
-  opts.prefix = 'State: '
-  get_utils().notify(message, level, opts)
-end
 
 -- 状態の初期化
 M.current_channel_id = nil
@@ -64,7 +55,7 @@ function M.set_current_channel(channel_id, channel_name, silent)
 
   -- イベントを発行
   if not silent then
-    get_events().emit('state:channel_changed', channel_id, channel_name)
+    get_events().emit("state:channel_changed", channel_id, channel_name)
   end
 end
 
@@ -85,7 +76,7 @@ function M.set_current_thread(thread_ts, thread_message, silent)
 
   -- イベントを発行
   if not silent then
-    get_events().emit('state:thread_changed', thread_ts, thread_message)
+    get_events().emit("state:thread_changed", thread_ts, thread_message)
   end
 end
 
@@ -104,7 +95,7 @@ function M.set_channels(channels, silent)
 
   -- イベントを発行
   if not silent then
-    get_events().emit('state:channels_updated', M.channels)
+    get_events().emit("state:channels_updated", M.channels)
   end
 end
 
@@ -147,7 +138,7 @@ function M.set_messages(channel_id, messages, silent)
 
   -- イベントを発行
   if not silent then
-    get_events().emit('state:messages_updated', channel_id, M.messages[channel_id])
+    get_events().emit("state:messages_updated", channel_id, M.messages[channel_id])
   end
 end
 
@@ -167,7 +158,7 @@ function M.set_thread_messages(thread_ts, messages, silent)
 
   -- イベントを発行
   if not silent then
-    get_events().emit('state:thread_messages_updated', thread_ts, M.thread_messages[thread_ts])
+    get_events().emit("state:thread_messages_updated", thread_ts, M.thread_messages[thread_ts])
   end
 end
 
@@ -200,7 +191,7 @@ function M.set_initialized(initialized, silent)
 
   -- イベントを発行
   if not silent then
-    get_events().emit('state:initialized_changed', initialized)
+    get_events().emit("state:initialized_changed", initialized)
   end
 end
 
@@ -225,7 +216,7 @@ function M.set_channel_starred(channel_id, is_starred, silent)
 
   -- イベントを発行
   if not silent then
-    get_events().emit('state:channel_starred_changed', channel_id, is_starred)
+    get_events().emit("state:channel_starred_changed", channel_id, is_starred)
   end
 end
 
@@ -274,8 +265,8 @@ function M.init_section_collapsed()
 
   -- デフォルトでは「スター付き」セクションは展開、「チャンネル」セクションは展開
   M.section_collapsed = {
-    starred = saved_collapsed.starred or false,  -- スター付きセクション
-    channels = saved_collapsed.channels or false  -- チャンネルセクション
+    starred = saved_collapsed.starred or false, -- スター付きセクション
+    channels = saved_collapsed.channels or false, -- チャンネルセクション
   }
 end
 
@@ -303,12 +294,12 @@ end
 ---@param name string セクション名
 ---@return string セクションID
 function M.add_section(name)
-  local id = os.time() .. '_' .. math.random(1000, 9999) -- ユニークIDを生成
+  local id = os.time() .. "_" .. math.random(1000, 9999) -- ユニークIDを生成
   M.custom_sections[id] = {
     id = id,
     name = name,
     order = table.maxn(M.custom_sections) + 1,
-    is_collapsed = false
+    is_collapsed = false,
   }
   return id
 end
@@ -394,7 +385,7 @@ function M.set_user_cache(user_id, user_data, silent)
 
   -- イベントを発行
   if not silent then
-    get_events().emit('state:user_cache_updated', user_id, user_data)
+    get_events().emit("state:user_cache_updated", user_id, user_data)
   end
 
   return user_data
@@ -410,22 +401,22 @@ function M.get_user_by_id(user_id)
   end
 
   -- キャッシュにない場合はイベントを発行して取得を要求
-  get_events().emit('api:get_user_info_by_id', user_id)
+  get_events().emit("api:get_user_info_by_id", user_id)
 
   -- nilを返す（非同期で取得するため）
   return nil
 end
 
 -- APIモジュールからのイベントハンドラを登録
-get_events().on('api:user_info_by_id_loaded', function(user_id, user_data)
+get_events().on("api:user_info_by_id_loaded", function(user_id, user_data)
   -- キャッシュに保存（イベントを発行するためにsilent=falseに設定）
   M.set_user_cache(user_id, user_data, false)
 end)
 
 -- 現在のチャンネルIDを要求するイベントのハンドラを登録
-get_events().on('api:get_current_channel', function()
+get_events().on("api:get_current_channel", function()
   -- 現在のチャンネルIDを返す
-  get_events().emit('api:current_channel', M.current_channel_id)
+  get_events().emit("api:current_channel", M.current_channel_id)
 end)
 
 return M

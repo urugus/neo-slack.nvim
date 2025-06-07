@@ -6,4 +6,4 @@
 ---@brief ]]
 
 -- 新しいUIモジュールを返す
-return require('neo-slack.ui.init')
+return require("neo-slack.ui.init")
