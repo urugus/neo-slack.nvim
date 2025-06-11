@@ -86,11 +86,45 @@ local api_mock = mock({ test_connection = function() end }, true)
 dependency_mock.get.returns_with_args('api', api_mock)
 ```
 
+### Module Development Pattern
+
+When creating or modifying modules, follow this pattern:
+```lua
+-- Get dependency container
+local dependency = require('neo-slack.core.dependency')
+
+-- Define dependency getters (lazy loading)
+local function get_utils() return dependency.get('utils') end
+local function get_events() return dependency.get('core.events') end
+
+-- Use dependencies within functions
+function M.some_function()
+  local utils = get_utils()
+  utils.notify('Message', vim.log.levels.INFO)
+end
+```
+
+### Event Naming Convention
+
+- Success events: `<action>_success` (e.g., `message_sent_success`)
+- Failure events: `<action>_failure`
+- Namespaced events: `<namespace>:<event>` (e.g., `api:connected`)
+
 ### Plugin Commands
 
 - `:SlackSetup` - Initialize plugin
 - `:SlackStatus` - Check connection status
 - `:SlackChannels` - List channels
-- `:SlackMessages` - View messages
-- `:SlackSend` - Send message
+- `:SlackMessages [channel]` - View messages in channel
+- `:SlackSend [channel] [message]` - Send message
+- `:SlackReply [ts] [text]` - Reply to message thread
+- `:SlackReact [ts] [emoji]` - Add reaction
 - `:SlackSetToken` - Configure API token
+
+### Important Conventions
+
+- **Japanese Documentation**: Code comments and user-facing messages are in Japanese
+- **Promise/Callback Dual API**: New code uses promises (`*_promise` functions), callback versions maintained for compatibility
+- **Error Types**: Use structured errors with types: API, NETWORK, CONFIG, AUTH, STORAGE, INTERNAL, UI
+- **Lazy Loading**: Modules registered as factories in dependency container, loaded on first access
+- **Token Security**: Tokens stored locally via storage module, never in config files

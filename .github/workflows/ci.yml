@@ -2,54 +2,137 @@ name: CI
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, develop ]
   pull_request:
     branches: [ main ]
 
 jobs:
-  luacheck:
-    name: Luacheck
+  lint:
+    name: Lint
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
+
       - name: Setup Lua
-        uses: leafo/gh-actions-lua@v9
+        uses: leafo/gh-actions-lua@v10
         with:
           luaVersion: "5.1"
-          buildCache: false
-      - name: Install luacheck
+
+      - name: Setup LuaRocks
         uses: leafo/gh-actions-luarocks@v4
-      - name: Install luacheck
+
+      - name: Install Luacheck
         run: luarocks install luacheck
-      - name: Run luacheck
-        run: |
-          # 構文エラーのみを検出し、警告は無視する
-          luacheck lua/ --no-unused --no-redefined --no-unused-args --codes || [ $? -eq 1 ]
 
-  stylua:
-    name: StyLua
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
+      - name: Run Luacheck
+        run: luacheck lua/ --no-unused --no-redefined --no-unused-args --codes
 
-      - name: Run StyLua
+      - name: Check code formatting with StyLua
         uses: JohnnyMorganz/stylua-action@v3
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           version: latest
           args: --check lua/
-        continue-on-error: true  # フォーマットエラーは無視する
 
-  tests:
-    name: Tests
+  test:
+    name: Test - Neovim ${{ matrix.neovim_version }}
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        neovim_version:
+          - stable
+          - v0.9.5
+          - v0.10.0
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Neovim
+        uses: rhysd/action-setup-vim@v1
+        with:
+          neovim: true
+          version: ${{ matrix.neovim_version }}
+
+      - name: Setup Lua
+        uses: leafo/gh-actions-lua@v10
+        with:
+          luaVersion: "5.1"
+
+      - name: Setup LuaRocks
+        uses: leafo/gh-actions-luarocks@v4
+
+      - name: Install test dependencies
+        run: |
+          luarocks install busted
+          luarocks install luacov
+          luarocks install luacov-coveralls
+
+      - name: Run tests
+        run: |
+          export LUA_PATH="./lua/?.lua;./lua/?/init.lua;;"
+          busted --coverage test/
+
+      - name: Generate coverage report
+        if: matrix.neovim_version == 'stable'
+        run: luacov
+
+      - name: Upload coverage to Coveralls
+        if: matrix.neovim_version == 'stable' && github.event_name == 'push'
+        env:
+          COVERALLS_REPO_TOKEN: ${{ secrets.COVERALLS_REPO_TOKEN }}
+        run: luacov-coveralls -v
+        continue-on-error: true
+
+  documentation:
+    name: Documentation
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
-      - name: Install Neovim
+      - uses: actions/checkout@v4
+
+      - name: Check documentation
+        run: |
+          # ドキュメントファイルの存在確認
+          test -f README.md || (echo "README.md not found" && exit 1)
+          test -f doc/neo-slack.nvim.txt || (echo "doc/neo-slack.nvim.txt not found" && exit 1)
+          
+          # ヘルプタグの確認
+          if ! grep -q "neo-slack.nvim" doc/neo-slack.nvim.txt; then
+            echo "Help documentation seems incomplete"
+            exit 1
+          fi
+
+  integration:
+    name: Integration Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Neovim
         uses: rhysd/action-setup-vim@v1
         with:
           neovim: true
           version: stable
-      - name: Run Syntax Check
+
+      - name: Run Neovim syntax check
         run: |
-          nvim --headless -u NONE -c "lua dofile('test/syntax_check.lua')" -c "q"
+          nvim --headless -u NONE \
+            -c "set runtimepath+=." \
+            -c "runtime! plugin/neo-slack.vim" \
+            -c "lua dofile('test/syntax_check.lua')" \
+            -c "q"
+
+      - name: Check plugin loads correctly
+        run: |
+          cat > test_init.vim << 'EOF'
+          set nocompatible
+          set runtimepath+=.
+          runtime! plugin/neo-slack.vim
+          
+          " プラグインが正しくロードされているか確認
+          if !exists(':SlackSetup')
+            cquit 1
+          endif
+          
+          quit
+          EOF
+          
+          nvim --headless -u test_init.vim || (echo "Plugin failed to load" && exit 1)

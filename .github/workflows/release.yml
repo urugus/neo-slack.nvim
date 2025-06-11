@@ -11,26 +11,79 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Get tag message
-        id: tag
+      - name: Setup Neovim
+        uses: rhysd/action-setup-vim@v1
+        with:
+          neovim: true
+          version: stable
+
+      - name: Validate plugin
         run: |
-          TAG_MESSAGE=$(git tag -l --format='%(contents)' ${{ github.ref_name }})
-          echo "message<<EOF" >> $GITHUB_OUTPUT
-          echo "$TAG_MESSAGE" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
+          nvim --headless -u NONE \
+            -c "set runtimepath+=." \
+            -c "runtime! plugin/neo-slack.vim" \
+            -c "if !exists(':SlackSetup') | cquit 1 | endif" \
+            -c "quit"
+
+      - name: Get version and changelog
+        id: version
+        run: |
+          # Extract version from tag
+          VERSION=${GITHUB_REF#refs/tags/}
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          
+          # Get previous tag
+          PREV_TAG=$(git describe --tags --abbrev=0 $VERSION^ 2>/dev/null || echo "")
+          echo "prev_tag=$PREV_TAG" >> $GITHUB_OUTPUT
+          
+          # Determine if this is a prerelease
+          if [[ "$VERSION" =~ -(alpha|beta|rc) ]]; then
+            echo "prerelease=true" >> $GITHUB_OUTPUT
+          else
+            echo "prerelease=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Generate changelog
+        id: changelog
+        run: |
+          VERSION=${{ steps.version.outputs.version }}
+          PREV_TAG=${{ steps.version.outputs.prev_tag }}
+          
+          # Create changelog
+          {
+            echo "## What's Changed in $VERSION"
+            echo ""
+            
+            # Get commit messages
+            if [ -n "$PREV_TAG" ]; then
+              echo "### Commits"
+              git log ${PREV_TAG}..${VERSION} --pretty=format:"- %s (%h)" | grep -E "(feat|fix|docs|style|refactor|test|chore):" || true
+              echo ""
+              echo "### Other Changes"
+              git log ${PREV_TAG}..${VERSION} --pretty=format:"- %s (%h)" | grep -v -E "(feat|fix|docs|style|refactor|test|chore):" || true
+            else
+              git log ${VERSION} --pretty=format:"- %s (%h)"
+            fi
+            
+            echo ""
+            echo ""
+            echo "**Full Changelog**: https://github.com/${{ github.repository }}/compare/${PREV_TAG}...${VERSION}"
+          } > RELEASE_NOTES.md
 
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
-          body: |
-            ## 変更点
-
-            ${{ steps.tag.outputs.message }}
+          name: ${{ steps.version.outputs.version }}
+          body_path: RELEASE_NOTES.md
           draft: false
-          prerelease: false
+          prerelease: ${{ steps.version.outputs.prerelease }}
+          files: |
+            LICENSE
+            README.md
+            doc/neo-slack.nvim.txt
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

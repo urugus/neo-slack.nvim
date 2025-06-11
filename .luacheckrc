@@ -1,14 +1,15 @@
--- Luacheck設定ファイル
+-- Luacheck configuration for neo-slack.nvim
 
--- Lua標準ライブラリの設定
-std = "lua51"  -- Neovimは基本的にLua 5.1互換
+-- Neovim globals
+std = "lua51"
 
--- グローバル変数の定義
+-- Allow vim global
 globals = {
   "vim",
+  "_G",
 }
 
--- Neovim APIのグローバル変数
+-- Neovim API read-only globals
 read_globals = {
   "vim.api",
   "vim.fn",
@@ -20,30 +21,68 @@ read_globals = {
   "vim.diagnostic",
   "vim.keymap",
   "vim.json",
+  "vim.log",
+  "vim.notify",
+  "vim.schedule",
+  "vim.defer_fn",
+  "vim.deepcopy",
+  "vim.tbl_extend",
+  "vim.inspect",
+  "vim.split",
+  "vim.trim",
 }
 
--- 無視するファイルパターン
+-- Ignore some warnings
+ignore = {
+  "212", -- Unused argument
+  "213", -- Unused loop variable
+  "311", -- Value assigned to a local variable is unused
+  "312", -- Value of an argument is unused
+  "411", -- Redefining a local variable
+  "412", -- Redefining an argument
+  "421", -- Shadowing a local variable
+  "422", -- Shadowing an argument
+}
+
+-- Project specific settings
+files["lua/neo-slack/**/*.lua"] = {
+  -- Additional globals for plugin modules
+  globals = {
+    "package",
+  }
+}
+
+files["test/**/*_spec.lua"] = {
+  -- Test framework globals
+  globals = {
+    "describe",
+    "it",
+    "before_each",
+    "after_each",
+    "assert",
+    "mock",
+    "spy",
+    "stub",
+    "pending",
+    "setup",
+    "teardown",
+    "unpack", -- Lua 5.1
+    "table.unpack", -- Lua 5.2+
+  },
+  read_globals = {
+    "os",
+    "math",
+    "table",
+  }
+}
+
+-- Exclude vendor files
 exclude_files = {
   "lua/neo-slack/vendor/**",
 }
 
--- 無視する警告
-ignore = {
-  "212", -- 未使用の引数
-  "213", -- 未使用の変数
-  -- "E011" は削除 - 構文エラーを検出するために無視しない
-}
-
--- 最大行長
+-- Max line length
 max_line_length = 120
 
--- 最大文字列長
-max_string_line_length = 120
-
--- 最大コメント行長
-max_comment_line_length = 120
-
--- 特定のファイルに対する設定
-files = {
-  -- 構文エラーを無視する設定は削除
-}
+-- Max cyclomatic complexity
+max_cyclomatic_complexity = 15

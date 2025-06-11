@@ -1,0 +1,30 @@
+-- LuaCov configuration file
+
+-- Patterns for files to include in coverage
+include = {
+  "lua/neo%-slack/.*%.lua$",
+}
+
+-- Patterns for files to exclude from coverage
+exclude = {
+  "test/.*%.lua$",
+  "lua/neo%-slack/vendor/.*%.lua$",
+}
+
+-- Reporter to use
+reporter = "default"
+
+-- Output file
+reportfile = "luacov.report.out"
+
+-- Statistics file
+statsfile = "luacov.stats.out"
+
+-- Run reporter on completion
+runreport = true
+
+-- Delete stats file after reporting
+deletestats = false
+
+-- Process Lua language constructs
+codefromstrings = true
