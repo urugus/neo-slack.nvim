@@ -1,10 +1,10 @@
 # Contributing to neo-slack.nvim
 
-neo-slack.nvim へのコントリビューションを歓迎します！
+Contributions to neo-slack.nvim are welcome!
 
-## 開発環境のセットアップ
+## Development Setup
 
-### 必要なツール
+### Prerequisites
 
 - Neovim >= 0.9.5
 - Lua 5.1
@@ -13,30 +13,29 @@ neo-slack.nvim へのコントリビューションを歓迎します！
 - [StyLua](https://github.com/JohnnyMorganz/StyLua)
 - [Busted](https://github.com/lunarmodules/busted)
 
-### インストール
+### Installation
 
 ```bash
-# テスト依存のインストール
 luarocks install busted
 luarocks install luacov
 luarocks install luacheck
 ```
 
-## 開発ワークフロー
+## Development Workflow
 
-### 1. ブランチを作成
+### 1. Create a branch
 
 ```bash
 git checkout -b feature/your-feature
 ```
 
-### 2. コードを変更
+### 2. Make your changes
 
-アーキテクチャの詳細は [CLAUDE.md](CLAUDE.md) を参照してください。
+See [CLAUDE.md](CLAUDE.md) for architecture details.
 
-### 3. テストとリントを実行
+### 3. Run tests and linting
 
-コミット前に必ず以下を実行してください：
+Please run the following before committing:
 
 ```bash
 luacheck lua/ --no-unused --no-redefined --no-unused-args --codes
@@ -44,24 +43,24 @@ stylua --check lua/
 busted test/
 ```
 
-### 4. Pull Request を作成
+### 4. Create a Pull Request
 
-- PR テンプレートに従って記述してください
-- CI が通ることを確認してください
+- Follow the PR template
+- Make sure CI passes
 
-## コーディング規約
+## Coding Conventions
 
-- **フォーマット**: StyLua の設定に従う
-- **Lint**: Luacheck のルールに従う
-- **コメント・メッセージ**: 日本語で記述
-- **依存関係**: `require` の代わりに `dependency.get()` を使用
-- **エラー処理**: 構造化エラー (`core/errors.lua`) を使用
-- **非同期処理**: Promise ベースの API を使用
+- **Formatting**: Follow the StyLua configuration
+- **Lint**: Follow Luacheck rules
+- **Comments & messages**: Written in Japanese
+- **Dependencies**: Use `dependency.get()` instead of `require`
+- **Error handling**: Use structured errors (`core/errors.lua`)
+- **Async**: Use the Promise-based API
 
-## バグ報告
+## Bug Reports
 
-[Issue テンプレート](https://github.com/urugus/neo-slack.nvim/issues/new/choose) を使用してバグを報告してください。
+Please use the [Issue template](https://github.com/urugus/neo-slack.nvim/issues/new/choose) to report bugs.
 
-## セキュリティ
+## Security
 
-セキュリティに関する問題は、公開 Issue ではなく [Security Advisory](https://github.com/urugus/neo-slack.nvim/security/advisories/new) から報告してください。
+Please report security issues via [Security Advisory](https://github.com/urugus/neo-slack.nvim/security/advisories/new) instead of public issues.
