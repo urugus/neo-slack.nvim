@@ -1,0 +1,27 @@
+# Lua
+luacov.stats.out
+luacov.report.out
+
+# LuaRocks
+*.rock
+*.rockspec
+lua_modules/
+
+# Test artifacts
+test_init.vim
+
+# Coverage
+coverage/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+*.swp
+*.swo
+*~
+.vscode/
+.idea/
+tags
+!doc/tags
