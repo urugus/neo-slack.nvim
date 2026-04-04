@@ -28,7 +28,7 @@ jobs:
         run: luacheck lua/ --no-unused --no-redefined --no-unused-args --codes
 
       - name: Check code formatting with StyLua
-        uses: JohnnyMorganz/stylua-action@v3
+        uses: JohnnyMorganz/stylua-action@v4
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           version: latest
